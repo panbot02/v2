@@ -1,6 +1,10 @@
-/* One shared, discrete three-tier type system. No remote font requests. */
+/* One shared, discrete three-tier type system. No remote font requests.
+   Desktop: 14px body and controls, 24px secondary, 56px display.
+   Narrow (max-width 740px): 14px, 22px, 36px. No other visual sizes.
+   Controls use the 14px body size on purpose. A 16px field would stop iOS
+   focus zoom, and it would also add a fourth size, so the field stays 14px. */
 :root{
-  --type-body:16px;
+  --type-body:14px;
   --type-secondary:24px;
   --type-title:56px;
   --type-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Noto Sans","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
@@ -35,7 +39,7 @@ body{line-height:1.65;letter-spacing:0;font-kerning:normal;font-feature-settings
 .stepper .step-label,.step-caption{line-height:1.35}
 nav a,nav button{font-weight:500}.brand span{opacity:.7}
 @media(max-width:740px){
-  :root{--type-body:16px;--type-secondary:22px;--type-title:36px}
+  :root{--type-body:14px;--type-secondary:22px;--type-title:36px}
   header .w b{white-space:nowrap}header .w nav{gap:8px}header .w nav a[href="#contact"]{padding:5px 6px}header .w .tg{margin-left:8px;width:28px}
   .hero .w{padding-top:42px}.hero .from{gap:12px 24px}.hero h1{white-space:normal}
   .stepper{gap:0}.stepper li{min-width:0}.stepper .num{width:28px;height:28px;line-height:1;margin:0}.stepper li:not(:last-child):after{top:13px}

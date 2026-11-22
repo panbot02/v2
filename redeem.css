@@ -17,5 +17,6 @@ header{position:sticky;top:0;z-index:30;background:rgba(22,22,23,.86);color:#e8e
 
 .preview-note strong,.preview-note>span{display:block}.preview-note strong{font-size:13px}.preview-note>span{margin:3px 0 8px}.preview-controls{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin:8px auto}.preview-controls a{display:inline-block;margin:0;padding:5px 11px;background:rgba(255,255,255,.6);border:1px solid #68420c22;border-radius:999px;color:#4c3210;font-size:11px;font-weight:500}.preview-controls a:hover{background:#fff}.preview-note>.sales-link{display:inline-block;margin:4px 0}.preview-note{padding:12px 20px}
 
+#lookup-result{scroll-margin-top:68px}
 /* Inline submission feedback: preserve the active step, form and confirmation. */
 .button-spinner{display:inline-block;width:14px;height:14px;flex:none;vertical-align:-2px;margin-right:8px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:button-spin .75s linear infinite}.btn[aria-busy="true"]{display:inline-flex;align-items:center;justify-content:center;opacity:.8;cursor:wait}#stage[aria-busy="true"] input,#stage[aria-busy="true"] textarea{opacity:.8}@keyframes button-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.button-spinner{animation:none}}

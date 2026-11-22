@@ -51,7 +51,18 @@ async function api(path,data){
  if(res.status===429){const retry=res.headers.get('Retry-After');const sec=/^\d+(\.\d+)?$/.test(retry||'')?Number(retry):Math.max(1,(Date.parse(retry)-Date.now())/1000||30);const wait=Math.ceil(sec*1000);rateUntil.set(path,Date.now()+wait);throw new ApiError('请求有点密，等 '+Math.ceil(wait/1000)+' 秒再试就好。','rate',wait)}
  if(res.status===503)throw new ApiError('安全校验暂不可用，请稍后再试。兑换码请先保留好。','unavailable');
  let r;try{r=await res.json()}catch{throw new ApiError('接口没有返回可读取的结果，请稍后再试。','response')}
- if(!res.ok||Number(r.code)!==200)throw new ApiError(friendly(r.error||'这一步暂时没有完成，请稍后再试。'),'business');
+ if(!res.ok||Number(r.code)!==200){
+  const data=r.data&&typeof r.data==='object'?r.data:{};
+  const raw=typeof r.error==='string'?r.error:(typeof data.error==='string'?data.error:'');
+  const fail=new ApiError(friendly(raw||'这一步暂时没有完成，请稍后再试。'),'business');
+  fail.code=Number(r.code);
+  fail.rawError=raw;
+  const status=r.cdk_status??data.cdk_status;
+  fail.cdkStatus=typeof status==='string'?status:'';
+  const coded=r.error_code??r.biz_code??data.error_code??data.biz_code;
+  fail.errorCode=typeof coded==='string'?coded:'';
+  throw fail;
+ }
  return payload(r);
 }
 function err(e){$('alert').textContent=friendly(e.message||e);$('alert').hidden=false;if(e.kind==='network')$('network-note').hidden=false;}
@@ -63,9 +74,10 @@ function inlineLoading(button,text){
  const controls=[...stage.querySelectorAll('button,input,textarea,select'),$('query-tab'),$('redeem-tab'),$('query-nav')].filter(Boolean);
  const states=controls.map(el=>[el,el.disabled]);for(const [el] of states)el.disabled=true;
  const html=button?.innerHTML;stage.setAttribute('aria-busy','true');
- if(button){button.setAttribute('aria-busy','true');button.innerHTML='<span class="button-spinner" aria-hidden="true"></span><span>'+esc(text)+'</span>'}
+ if(button){button.setAttribute('aria-busy','true');button.innerHTML='<span class="button-spinner" aria-hidden="true"></span><span data-loading-label>'+esc(text)+'</span>'}
  let released=false;return ()=>{if(released)return;released=true;stage.removeAttribute('aria-busy');for(const [el,disabled] of states)if(el.isConnected)el.disabled=disabled;if(button?.isConnected){button.innerHTML=html;button.removeAttribute('aria-busy')}};
 }
+function setLoadingLabel(button,text){const label=button?.querySelector('[data-loading-label]');if(label)label.textContent=text}
 function setMode(m){pollId++;mode=m;clearError();$('query-tab').classList.toggle('on',m==='query');$('redeem-tab').classList.toggle('on',m==='redeem');if(m==='query')showQuery();else showCode();}
 function tab(m){if(busy)return;captureSession();token='';account=null;setMode(m)}
 $('query-tab').onclick=()=>tab('query');$('query-nav').onclick=()=>{tab('query');document.querySelector('.workspace').scrollIntoView()};$('net-query').onclick=()=>tab('query');$('redeem-tab').onclick=()=>tab('redeem');
@@ -73,7 +85,7 @@ function heading(tag,title,desc){return '<div class="section-tag">'+esc(tag)+'</
 function title(meta=flow?.meta){if(!meta)return '订阅会员';let s=brandText(meta.product_name||plan(meta.plan));if(meta.product_type==='codex_credits')s+=' · '+(Number(meta.credit_quantity)||0).toLocaleString('zh-CN')+' Credits';return s}
 function banner(){let m=flow.meta,p=m.provider;let art=p==='claude'?'<span class="mark" aria-hidden="true">✳</span>':'<img src="img/'+(p==='grok'?'switch-grok.webp':'switch-chatgpt.webp')+'" alt="">';return '<div class="product-banner">'+art+'<div><b>'+esc(title())+'</b><small>'+esc(PROVIDER[p]||'订阅服务')+' · 兑换码已验证</small></div><span class="verified">✓ 已验证</span></div>'}
 function captureSession(){const field=$('session');if(field)sessionDraft=field.value}
-function showCode(){cdkValid=false;token='';account=null;const resume=flow?.uncertain||flow?.queryToken;const cdkValue=cdkDraft||flow?.cdkInput||flow?.cdk||'';render(heading('STEP 01 · 从这里开始','输入兑换码，<span>开启好体验。</span>','准备好你的 CDK，萌萌哒 AI 先帮你确认可充值的会员类型。')+
+function showCode(){cancelLookup();cdkValid=false;token='';account=null;const resume=flow?.uncertain||flow?.queryToken;const cdkValue=cdkDraft||flow?.cdkInput||flow?.cdk||'';render(heading('STEP 01 · 从这里开始','输入兑换码，<span>开启好体验。</span>','准备好你的 CDK，萌萌哒 AI 先帮你确认可充值的会员类型。')+
  (resume?'<div class="network-note"><b>上次的订单还在这里。</b><p>若上次已提交，请先恢复查询，确认结果后再操作。</p><button class="text-btn" id="resume">恢复订单查询 ›</button></div>':'')+
  '<form id="code-form" class="form"><label for="cdk">兑换码（CDK）</label><input id="cdk" class="field cdk-field" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="粘贴你的兑换码" maxlength="500" value="'+esc(cdkValue)+'" required><div class="actions"><button class="btn" type="submit">验证兑换码 <span>→</span></button><a class="text-btn step-back" id="step-back" href="'+esc(salesURL('index.html'))+'">上一步</a><button type="button" class="text-btn" id="go-query">已兑换？查询订单 ›</button></div></form><div class="bottom-hint"><span>✓</span> 验证成功后，才会出现账号登录信息的输入框。</div>',1);
  const cdkField=$('cdk');if(cdkField)cdkField.addEventListener('input',()=>{cdkDraft=cdkField.value});
@@ -83,13 +95,13 @@ function showCode(){cdkValid=false;token='';account=null;const resume=flow?.unce
  if(preview){flow={nonce:'preview',cdk:c,meta:DEMO};cdkValid=true;showSession();return}
  if(!flow)flow={nonce:newNonce(),cdk:c,cdkInput:trimmed,cdkNormalized:true};else flow.cdkInput=trimmed;persist();
  if(flow.uncertain||flow.queryToken){await restore();return}
- busy=true;const release=inlineLoading($('code-form').querySelector('[type=submit]'),'正在验证…');try{await verify(false);cdkValid=true;showSession()}catch(e){err(e)}finally{release();busy=false}
+ busy=true;cancelLookup();const release=inlineLoading($('code-form').querySelector('[type=submit]'),'正在验证…');try{await verify(false);cdkValid=true;showSession()}catch(e){if(isConsumedVerifyError(e)){setLoadingLabel($('code-form')?.querySelector('[type=submit]'),'正在查询订单…');await lookupConsumed()}else err(e)}finally{release();busy=false}
  };
 }
 async function verify(renew){const p={cdk:flow.cdk,request_nonce:flow.nonce};if(renew)p.renew=true;const r=await api('verifyCdk',p);if(!r.activation_token||!['openai','claude','grok'].includes(r.provider))throw new ApiError('接口返回的兑换凭据不完整，请稍后再验证一次。','response');flow.meta={activation_token:r.activation_token,expires_in:r.expires_in,expires_at:r.expires_at,provider:r.provider,product_name:r.product_name,plan:r.plan,product_type:r.product_type,credit_quantity:r.credit_quantity,resumed:r.resumed};persist();}
 const HELP={openai:{label:'Session JSON',placeholder:'粘贴 chatgpt.com/api/auth/session 返回的完整 JSON',html:'<li>打开 <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">chatgpt.com ↗</a>，登录这次要充值的账号。</li><li>在同一浏览器打开 <a href="https://chatgpt.com/api/auth/session" target="_blank" rel="noopener noreferrer">chatgpt.com/api/auth/session ↗</a>。</li><li>复制页面中的完整 JSON，粘贴到下方；也可以导入本地文件。</li>'},claude:{label:'sessionKey',placeholder:'粘贴 Claude 的 sessionKey Cookie 值',html:'<li>打开 <a href="https://claude.ai/" target="_blank" rel="noopener noreferrer">claude.ai ↗</a>，登录要充值的账号。</li><li>打开浏览器开发者工具 → Application / 应用 → Cookies。</li><li>找到 sessionKey，复制它的值到下方。不要提供密码。</li>'},grok:{label:'sso Cookie',placeholder:'粘贴 sso 值，或 sso=TOKEN / Cookie 请求头 / 含 sso 的 Cookie JSON',html:'<li>打开 <a href="https://grok.com/" target="_blank" rel="noopener noreferrer">grok.com ↗</a>，登录要充值的账号。</li><li>开发者工具 → Application / 应用 → Cookies → grok.com，复制 sso。</li><li>也支持 sso=TOKEN、Cookie 请求头、{"sso":"TOKEN"} 或 Cookie 数组（域名为 grok.com / .grok.com）。仅 auth_token 或 sso-rw 不可用。</li>'}};
 function expires(){const v=flow?.meta?.expires_at;if(!v)return '';return '<p class="caption">本次验证有效至 '+esc(shanghai(v))+'。继续时会按需更新有效期，不会静默提交充值。</p>'}
-function showSession(){cdkValid=true;const h=HELP[flow.meta.provider];render(heading('STEP 02 · 先读账号，再做决定','把账号信息给我们，<span>先核对。</span>','这一步只读取账号与兑换资格，还不会开始充值。')+banner()+'<form id="session-form"><div class="label-row"><label for="session">'+h.label+'</label><span class="mini">仅本次使用</span></div><textarea id="session" aria-describedby="session-warning" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="'+esc(h.placeholder)+'" required></textarea><p class="session-warning" id="session-warning">登录凭据会发送至充值服务商 api.easysub.site，请仅在信任时继续。</p><div class="actions"><button class="btn" type="submit">读取并核对账号 →</button><button type="button" class="text-btn step-back" id="step-back">上一步</button></div><details class="help-detail" id="session-help"><summary>在哪里获取 '+h.label+'？</summary><ol>'+h.html+'</ol></details><details class="help-detail session-tools"><summary>从文件导入 / 安全说明</summary><div class="upload" id="drop"><span>也可拖入 .txt / .json 等文本文件 · 最大 5 MB</span><label for="file">导入文件</label><input type="file" id="file" accept=".txt,.json,.log,.text,application/json,text/plain" hidden></div><div class="upload-name" id="file-name"></div><div class="privacy">✓ 文件在本机读取、压缩，登录信息不写入浏览器存储。点击后将经萌萌哒 AI 的 Cloudflare 转发接口发送至充值服务商 api.easysub.site，用于核对账号与充值。Session / Cookie 等同登录凭据，请仅在知悉并信任该服务商时继续，勿发到聊天中。</div>'+expires()+'</details></form>',2);
+function showSession(){cancelLookup();cdkValid=true;const h=HELP[flow.meta.provider];render(heading('STEP 02 · 先读账号，再做决定','把账号信息给我们，<span>先核对。</span>','这一步只读取账号与兑换资格，还不会开始充值。')+banner()+'<form id="session-form"><div class="label-row"><label for="session">'+h.label+'</label><span class="mini">仅本次使用</span></div><textarea id="session" aria-describedby="session-warning" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="'+esc(h.placeholder)+'" required></textarea><p class="session-warning" id="session-warning">登录凭据会发送至充值服务商 api.easysub.site，请仅在信任时继续。</p><div class="actions"><button class="btn" type="submit">读取并核对账号 →</button><button type="button" class="text-btn step-back" id="step-back">上一步</button></div><details class="help-detail" id="session-help"><summary>在哪里获取 '+h.label+'？</summary><ol>'+h.html+'</ol></details><details class="help-detail session-tools"><summary>从文件导入 / 安全说明</summary><div class="upload" id="drop"><span>也可拖入 .txt / .json 等文本文件 · 最大 5 MB</span><label for="file">导入文件</label><input type="file" id="file" accept=".txt,.json,.log,.text,application/json,text/plain" hidden></div><div class="upload-name" id="file-name"></div><div class="privacy">✓ 文件在本机读取、压缩，登录信息不写入浏览器存储。点击后将经萌萌哒 AI 的 Cloudflare 转发接口发送至充值服务商 api.easysub.site，用于核对账号与充值。Session / Cookie 等同登录凭据，请仅在知悉并信任该服务商时继续，勿发到聊天中。</div>'+expires()+'</details></form>',2);
  const field=$('session');if(field&&!preview)field.value=sessionDraft;if(field)field.addEventListener('input',()=>{sessionDraft=field.value});
  // Position only an actual step transition if prior scrolling hid its input.
  requestAnimationFrame(()=>{const box=$('session');if(!box)return;const r=box.getBoundingClientRect(),nav=document.querySelector('header').getBoundingClientRect();if(r.top<nav.bottom||r.top>innerHeight-80)stage.scrollIntoView({block:'start',behavior:'instant'})});
@@ -138,7 +150,7 @@ function servicePromoHTML(){return '<p class="service-promo">更多 AI 会员服
 function resultHTML(o){const status={success:'充值成功',failed:'充值未完成',processing:'处理中'}[o.status]||'状态待确认';return '<div class="result-card"><h3>'+esc(o.order_no||'充值订单')+'<span class="result-status '+esc(o.status||'')+'">'+(preview?'演示 · ':'')+status+'</span></h3><div class="result-table">'+cell('账号',accountText(o.account||o.email))+cell('充值类型',orderProduct(o))+cell('卡号（支付卡尾号）',maskCard(o.payment_card))+cell('充值时间',o.finished_at?shanghai(o.finished_at):'待完成 · 北京时间')+cell('订单号',o.order_no||'暂未提供')+(o.started_at?cell('开始时间',shanghai(o.started_at)):'')+(o.error?cell(o.status==='processing'?'处理提示':'原因',friendly(o.error),true):'')+'</div>'+(o.status==='processing'?'<p class="caption">'+(o.payment_result_checking?'正在确认支付结果。':o.retrying?'正在自动重试。':'订单仍在处理中。')+'稍后可以再次查询，不要重复充值。</p>':'')+(o.status==='success'?servicePromoHTML():'')+'</div>'}
 function orderInfo(o){const lines=[preview?'萌萌哒 AI · 设计预览（虚构订单，未真实充值）':'萌萌哒 AI · 订单信息','账号：'+accountText(o.account||o.email),'充值类型：'+orderProduct(o),'卡号：'+maskCard(o.payment_card),'充值时间：'+(o.finished_at?shanghai(o.finished_at):'待完成'),'订单号：'+(o.order_no||'暂未提供'),'状态：'+({success:'充值成功',failed:'充值未完成',processing:'处理中'}[o.status]||'待确认')];if(o.status==='success')lines.push('更多 AI 会员服务，欢迎访问：萌萌哒 AI '+serviceHomeURL());return lines.join('\n')}
 function showResult(o){pollId++;token='';account=null;sessionDraft='';const success=o.status==='success';render('<div class="success-mark '+(success?'':'failure')+'">'+(success?'✓':'!')+'</div>'+heading('STEP 04 · '+(success?'好啦，充值完成':'这次未能完成'),preview?'演示结果，<span>不是真实充值。</span>':success?'新会员，<span>已经就位。</span>':'暂时没充上，<span>我们一起看一下。</span>',preview?'下面展示的是虚构订单，仅用于看看完成后的页面效果；没有真实账号被充值。':success?'感谢你的耐心等候。可以保存下方订单信息，之后查询也方便。':'请先查看订单原因。保留兑换码与订单号，联系萌萌哒 AI 确认后再操作。')+resultHTML(o)+'<div class="actions"><button class="btn" id="copy-order">复制订单信息</button><button class="text-btn" id="again">开始另一笔充值 ›</button></div><p class="toast" id="order-copy" role="status"></p>',4);$('copy-order').onclick=()=>copy(orderInfo(o),$('order-copy'));$('again').onclick=reset;}
-function reset(){pollId++;token='';account=null;sessionDraft='';cdkDraft='';redeemLocked=false;flow=null;if(!preview){try{sessionStorage.removeItem(KEY)}catch{}}setMode('redeem')}
+function reset(){pollId++;cancelLookup();token='';account=null;sessionDraft='';cdkDraft='';redeemLocked=false;flow=null;if(!preview){try{sessionStorage.removeItem(KEY)}catch{}}setMode('redeem')}
 function parseQueryInput(text){
  const lines=String(text??'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
  if(!lines.length)return null;
@@ -193,6 +205,110 @@ function classifyQuery(items,payload){
  }
  return {inputCount:items.length,found,missing,failed,disabled,expired,pending,locked,invalid:[]};
 }
+let lookupSeq=0;
+function cancelLookup(){lookupSeq++}
+function compactError(value){return String(value??'').trim().toLowerCase().replace(/\s+/g,'').replace(/[，,。．.！!？?：:]/g,'')}
+const CONSUMED_MESSAGE='该cdk兑换已完成请查询订单';
+const ACTIVATED_CODES=new Set(['activated','cdk_activated','consumed','cdk_consumed','redeemed']);
+const OTHER_CDK_STATUS=new Set(['unused','activating','disabled','expired','replaced','destroyed','unknown']);
+function isConsumedVerifyError(error){
+ if(!error||error.kind!=='business'||Number(error.code)!==0)return false;
+ const status=String(error.cdkStatus||'').trim().toLowerCase();
+ if(OTHER_CDK_STATUS.has(status))return false;
+ const coded=String(error.errorCode||'').trim().toLowerCase();
+ if(status==='activated'||ACTIVATED_CODES.has(coded))return true;
+ return compactError(error.rawError)===CONSUMED_MESSAGE;
+}
+function lookupProduct(order){
+ const named=order.product_name||order.plan;
+ if(!named)return '暂未提供';
+ let s=brandText(order.product_name||plan(order.plan));
+ if(order.product_type==='codex_credits'&&order.credit_quantity)s+=' · '+Number(order.credit_quantity).toLocaleString('zh-CN')+' Credits';
+ return s;
+}
+function lookupTime(order){
+ if(order.finished_at)return shanghai(order.finished_at);
+ if(order.status==='processing')return '处理中，完成时间尚未返回';
+ return '完成时间暂未提供';
+}
+function lookupStatus(order){return {success:'充值成功',failed:'充值未完成',processing:'处理中'}[order.status]||'状态待确认'}
+function lookupNotes(order){
+ const notes=[];
+ if(!order.product_name&&!order.plan)notes.push('订单没有返回充值类型。');
+ if(!order.finished_at)notes.push(order.status==='processing'?'订单还在处理，没有完成时间。':'订单没有返回完成时间。');
+ if(accountText(order.account||order.email)==='暂未提供')notes.push('订单没有返回账号。');
+ if(!order.status)notes.push('订单没有返回状态。');
+ return notes;
+}
+function lookupCard(order){
+ const status=lookupStatus(order);
+ const cls={success:'success',failed:'failed',processing:'processing'}[order.status]||'';
+ return '<div class="result-card"><h3>'+esc(order.order_no||'充值订单')+'<span class="result-status '+esc(cls)+'">'+status+'</span></h3><div class="result-table">'+
+  '<div class="result-cell" id="lookup-product"><small>充值类型</small><b>'+esc(lookupProduct(order))+'</b></div>'+
+  '<div class="result-cell" id="lookup-time"><small>充值时间</small><b>'+esc(lookupTime(order))+'</b></div>'+
+  '<div class="result-cell" id="lookup-account"><small>账号</small><b>'+esc(accountText(order.account||order.email))+'</b></div>'+
+  cell('状态',status)+
+  cell('订单号',order.order_no||'暂未提供')+
+  (order.payment_card?cell('卡号（支付卡尾号）',maskCard(order.payment_card)):'')+
+  (order.started_at?cell('开始时间',shanghai(order.started_at)):'')+
+  (order.error?cell(order.status==='processing'?'处理提示':'原因',friendly(order.error),true):'')+
+  '</div>'+(order.status==='success'?servicePromoHTML():'')+'</div>';
+}
+function lookupView(report,failure){
+ if(failure||!report)return {kind:'error',message:failure?.message||'订单查询没有返回结果。'};
+ if(report.found.length){
+  const order=report.found[0].order||{};
+  if(order.status==='success')return {kind:'success',order};
+  if(order.status==='processing')return {kind:'processing',order};
+  if(order.status==='failed')return {kind:'failed',order};
+  return {kind:'unknown',order,note:'订单状态不是已完成、处理中或失败。'};
+ }
+ if(report.failed.length)return {kind:'error',message:report.failed[0].error||'这一条暂时没有查完。'};
+ if(report.disabled.length)return {kind:'blocked',note:'订单查询显示这个兑换码已禁用，没有成功充值记录。'};
+ if(report.expired.length)return {kind:'blocked',note:'订单查询显示这个兑换码已过期，没有成功充值记录。'};
+ if(report.locked.length)return {kind:'blocked',note:'订单查询显示这个兑换码已锁定或处理中，但没有返回订单。'};
+ if(report.pending.length)return {kind:'empty',note:report.pending[0].note||'订单查询没有返回明确的订单详情。'};
+ return {kind:'empty',note:'订单查询没有返回订单。这不代表兑换码未使用，也不能当成充值成功。'};
+}
+const LOOKUP_COPY={
+ success:['STEP 01 · 已查到充值记录','这笔兑换，<span>已经完成。</span>','下面是订单查询返回的充值类型和完成时间，按北京时间显示。验证报错本身不能当成充值成功。'],
+ processing:['STEP 01 · 订单还在处理','充值还没结束，<span>先别当成成功。</span>','订单查询显示仍在处理。充值类型和时间以这次查询为准。'],
+ failed:['STEP 01 · 这笔没有完成','充值未完成，<span>请看订单原因。</span>','订单查询返回失败。验证报错不能单独当作完成。'],
+ empty:['STEP 01 · 没有订单记录','没有查到充值记录，<span>不能当成成功。</span>','验证接口提示兑换已完成，但订单查询没有返回可展示的订单。'],
+ error:['STEP 01 · 订单暂时没查到','这次没查成，<span>可以再试一次。</span>','验证接口提示兑换已完成。订单查询没有成功，所以还不能确认充了什么、什么时候完成。'],
+ blocked:['STEP 01 · 不能当成充值成功','查询结果不是成功订单，<span>请再确认。</span>','下面是订单查询返回的状态。不能把验证报错当成充值成功。'],
+ unknown:['STEP 01 · 状态待确认','订单状态还不能确认，<span>先别当成成功。</span>','订单查询返回了记录，但状态不是已完成、处理中或失败。']
+};
+function revealLookup(){
+ requestAnimationFrame(()=>{
+  const box=$('lookup-result');if(!box)return;
+  const nav=document.querySelector('header')?.getBoundingClientRect().bottom||0;
+  const focus=[$('lookup-product'),$('lookup-time'),$('lookup-account')].filter(Boolean);
+  const watched=focus.length?focus:[box];
+  const hidden=watched.some(el=>{const r=el.getBoundingClientRect();return r.top<nav+4||r.bottom>innerHeight-8});
+  if(hidden)box.scrollIntoView({block:'start',behavior:'instant'});
+ });
+}
+function showLookup(view){
+ cdkValid=false;token='';account=null;clearError();
+ const copy=LOOKUP_COPY[view.kind]||LOOKUP_COPY.unknown;
+ const notes=[view.note,view.message?friendly(view.message):'',...(view.order?lookupNotes(view.order):[])].filter(Boolean);
+ render('<div id="lookup-result">'+heading(copy[0],copy[1],copy[2])+(view.order?lookupCard(view.order):'<div class="empty" id="lookup-empty">没有可展示的充值类型或完成时间。</div>')+(notes.length?'<p class="caption">'+notes.map(esc).join('<br>')+'</p>':'')+'<div class="actions"><button class="btn" type="button" id="lookup-retry">重试查询</button><button class="text-btn" type="button" id="lookup-manual">手动查询订单 ›</button><button class="text-btn" type="button" id="lookup-another">换一个兑换码 ›</button></div></div>',1);
+ revealLookup();
+ $('lookup-retry').onclick=async()=>{if(busy)return;busy=true;clearError();const release=inlineLoading($('lookup-retry'),'正在查询…');try{await lookupConsumed()}finally{release();busy=false}};
+ $('lookup-manual').onclick=()=>{if(busy)return;tab('query')};
+ $('lookup-another').onclick=()=>{if(busy)return;showCode()};
+}
+async function lookupConsumed(){
+ const id=++lookupSeq;
+ const cdk=flow?.cdk;
+ if(!cdk){if(id===lookupSeq)showLookup({kind:'error',message:'没有可查询的兑换码。'});return}
+ let report=null,failure=null;
+ try{report=classifyQuery([{input:flow.cdkInput||cdk,cdk}],await api('queryOrder',{cdks:[cdk]}))}
+ catch(error){failure=error}
+ if(id!==lookupSeq)return;
+ showLookup(lookupView(report,failure));
+}
 async function query(cdk,canonical=false){
  const values=Array.isArray(cdk)?cdk:[cdk];
  const cdks=[...new Set(values.map(canonical?canonicalCdk:normalizeCdk))];
@@ -239,7 +355,7 @@ function renderQueryReport(report){
  const retry=$('retry-failed');if(retry)retry.onclick=()=>{const field=$('query-cdks');if(!field||busy)return;field.value=codeLines(report.failed);$('query-form').requestSubmit()};
 }
 async function restore(){if(busy)return;busy=true;clearError();const release=inlineLoading($('resume')||$('code-form')?.querySelector('[type=submit]'),'正在恢复查询…');try{if(flow.queryToken){await poll(true)}else{const rows=await query(flow.cdk,true);if(rows.length){flow.uncertain=rows.some(x=>x.status==='processing');persist();showResults(rows)}else err(new Error('暂未查到订单，这不代表兑换码无效。上次提交结果仍需确认，请保留兑换码稍后查询，或联系萌萌哒 AI。'))}}catch(e){err(e)}finally{release();busy=false}}
-function showQuery(){render(heading('订单查询 · 离开后也能找回','输入兑换码，<span>看看进度。</span>','一行一个 CDK，最多 50 个。查到的订单和没查到的兑换码都会留下。没查到订单不代表未使用或可以充值。')+'<form id="query-form"><label for="query-cdks">兑换码（CDK）</label><textarea id="query-cdks" class="cdk-field" spellcheck="false" autocomplete="off" placeholder="一行一个兑换码，最多 50 个" required>'+esc(flow?.cdkInput||flow?.cdk||'')+'</textarea><div class="actions"><button class="btn" type="submit">查询订单 →</button><button class="text-btn" type="button" id="back-redeem">返回充值</button></div></form><div id="query-results"></div>',1);$('back-redeem').onclick=()=>tab('redeem');$('query-form').onsubmit=async e=>{e.preventDefault();if(busy)return;clearError();const parsed=parseQueryInput($('query-cdks').value);if(!parsed)return;if(parsed.tooMany){err(new Error('一次最多查 50 个兑换码，分开查就好。'));return}if(preview){renderQueryReport(demoQueryReport());return}if(!parsed.items.length){renderQueryReport({inputCount:0,found:[],missing:[],failed:[],disabled:[],expired:[],pending:[],locked:[],invalid:parsed.invalid});return}busy=true;const release=inlineLoading($('query-form').querySelector('.btn'),'正在查询…');try{const report=classifyQuery(parsed.items,await api('queryOrder',{cdks:parsed.items.map(x=>x.cdk)}));report.invalid=parsed.invalid;renderQueryReport(report)}catch(error){err(error);renderQueryReport({inputCount:parsed.items.length,found:[],missing:[],failed:parsed.items.map(x=>({...x,error:error.message||''})),disabled:[],expired:[],pending:[],locked:[],invalid:parsed.invalid})}finally{release();busy=false}}}
+function showQuery(){cancelLookup();render(heading('订单查询 · 离开后也能找回','输入兑换码，<span>看看进度。</span>','一行一个 CDK，最多 50 个。查到的订单和没查到的兑换码都会留下。没查到订单不代表未使用或可以充值。')+'<form id="query-form"><label for="query-cdks">兑换码（CDK）</label><textarea id="query-cdks" class="cdk-field" spellcheck="false" autocomplete="off" placeholder="一行一个兑换码，最多 50 个" required>'+esc(flow?.cdkInput||flow?.cdk||'')+'</textarea><div class="actions"><button class="btn" type="submit">查询订单 →</button><button class="text-btn" type="button" id="back-redeem">返回充值</button></div></form><div id="query-results"></div>',1);$('back-redeem').onclick=()=>tab('redeem');$('query-form').onsubmit=async e=>{e.preventDefault();if(busy)return;clearError();const parsed=parseQueryInput($('query-cdks').value);if(!parsed)return;if(parsed.tooMany){err(new Error('一次最多查 50 个兑换码，分开查就好。'));return}if(preview){renderQueryReport(demoQueryReport());return}if(!parsed.items.length){renderQueryReport({inputCount:0,found:[],missing:[],failed:[],disabled:[],expired:[],pending:[],locked:[],invalid:parsed.invalid});return}busy=true;const release=inlineLoading($('query-form').querySelector('.btn'),'正在查询…');try{const report=classifyQuery(parsed.items,await api('queryOrder',{cdks:parsed.items.map(x=>x.cdk)}));report.invalid=parsed.invalid;renderQueryReport(report)}catch(error){err(error);renderQueryReport({inputCount:parsed.items.length,found:[],missing:[],failed:parsed.items.map(x=>({...x,error:error.message||''})),disabled:[],expired:[],pending:[],locked:[],invalid:parsed.invalid})}finally{release();busy=false}}}
 function showResults(rows){mode='query';$('query-tab').classList.add('on');$('redeem-tab').classList.remove('on');showQuery();renderQueryReport({inputCount:rows.length,found:rows.map(o=>({input:o.cdk||'',cdk:o.cdk||'',order:o})),missing:[],failed:[],disabled:[],expired:[],pending:[],locked:[],invalid:[]})}
 function previewRoute(){clearError();$('network-note').hidden=true;busy=false;pollId++;mode='redeem';$('redeem-tab').classList.add('on');$('query-tab').classList.remove('on');if(preview)flow={nonce:'preview',cdk:'DEMO-JMM-2026-PLUS',meta:DEMO};if(preview==='step2')showSession();else if(preview==='confirm'){token='preview-token';account=demoAccount();showConfirm()}else if(preview==='success')showResult(demoOrder());else if(preview==='failed')showResult({...demoOrder(),status:'failed',payment_card:null,error:'账号暂不符合本次充值条件，请核对后联系萌萌哒 AI。'});else if(preview==='processing')showProcessing({order_no:'JMM202611190001',retrying:true,attempt_current:2,attempt_max:3});else if(preview==='query'){setMode('query');renderQueryReport(demoQueryReport())}else if(location.hash==='#query'&&!preview)setMode('query');else showCode();}
 if(preview){const labels={step1:'1 验证兑换码',step2:'2 输入登录信息',confirm:'3 确认账号',success:'4 完成效果',query:'查询订单'};$('preview-controls').innerHTML=Object.entries(labels).map(([k,v])=>'<a href="'+esc(salesURL('redeem.html#preview='+k))+'">'+v+'</a>').join('');}

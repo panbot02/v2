@@ -267,18 +267,18 @@ try {
  check('uppercase Pan prefix strips once', sent('verifyCdk','ZzKey').at(-1).body.cdk==='ZzKey' && sent('queryOrder','ZzKey').at(-1).body.cdks[0]==='ZzKey');
  await another.click('#lookup-another');
  await another.waitForSelector('#cdk');
- const rawMark = calls.length;
+ const rawMark = calls.filter(item => item.name==='queryOrder' && item.cdk==='RAW-AbCkey').length;
  await fill(another, 'RAW-AbCkey');
  await submit(another);
  await another.waitForFunction(() => document.getElementById('alert').textContent==='CKD 有异常');
- check('raw code is not queried', calls.length===rawMark && await another.$('#lookup-product')===null);
+ check('raw used code is verified and not looked up', calls.some(item => item.name==='verifyCdk' && item.cdk==='RAW-AbCkey') && calls.filter(item => item.name==='queryOrder' && item.cdk==='RAW-AbCkey').length===rawMark && await another.$('#lookup-product')===null);
 
  const blank = await open(1280, 800);
  const mark = calls.length;
  await fill(blank, 'Pan-');
  await submit(blank);
- await blank.waitForFunction(() => document.getElementById('alert').textContent==='CKD 有异常');
- check('empty suffix does not call the api', calls.length===mark && (await blank.evaluate(() => document.getElementById('alert').textContent))==='CKD 有异常');
+ await blank.waitForFunction(() => document.getElementById('alert').textContent==='请输入有效的兑换码。');
+ check('empty suffix does not call the api', calls.length===mark && (await blank.evaluate(() => document.getElementById('alert').textContent))==='请输入有效的兑换码。');
 
  async function staysError(value, snippet){
   const next = await lookup(value);

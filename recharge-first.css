@@ -1,35 +1,28 @@
-/* Recharge density only. Colors, type, and controls stay with redeem.css,
-   the same light canvas, blue pills, and dark bar as the subscription page. */
-.input-first .intro{padding:32px 0 6px}
-.input-first .intro h1{margin:8px 0}
-.input-first .providers{margin-top:14px}
-.input-first .workspace{margin-bottom:48px}
+/* Recharge density only. Colors, type, and controls stay with redeem.css
+   and the shared three type sizes. The card is the page; the old hero is gone. */
+.input-first .workspace{margin-bottom:28px}
 .input-first .main-card{min-height:0}
 .input-first #session{min-height:120px}
-.input-first .assurance{margin-bottom:48px}
-.input-first .help{margin-bottom:28px}
+.input-first .sheet-foot{margin-top:8px}
 @media(max-width:740px){
-  .input-first .intro{padding:24px 0 2px}
+  .input-first .workspace{margin-bottom:20px}
+  .input-first .sheet-head{padding-bottom:10px}
 }
-/* Short windows only. Same three type sizes and the same screen; spacing
-   tightens so the exchange-code field and its submit stay in the first viewport
+/* Short windows only. Same three type sizes; spacing tightens so the
+   exchange-code field and its submit stay in the first viewport
    at 1024×500 and 390×600. Taller screens keep the roomier rhythm. */
 @media(max-height:640px){
-  .input-first .intro{padding:4px 0 0}
-  .input-first .intro h1{margin:2px 0;line-height:1.05!important}
-  .input-first .providers{margin-top:4px}
-  .input-first .providers img{width:20px;height:20px}
-  .input-first .main-card{padding-top:2px;padding-bottom:14px}
-  .input-first .stepper{padding-top:6px}
-  .input-first .step-caption{margin-top:2px}
-  .input-first .mode-tabs{margin-bottom:8px}
-  .input-first .mode-tabs button{padding:6px 0}
-  .input-first .section-tag{margin-bottom:0}
-  .input-first #stage[data-step="1"] h2{margin:0}
-  .input-first #stage[data-step="1"] .lead{margin:2px 0 6px}
+  .input-first .sheet-head{padding:0 0 6px}
+  .input-first .sheet-head p{margin-top:2px}
+  .input-first .main-card{padding-top:8px;padding-bottom:12px}
+  .input-first .step-caption{margin:0 0 6px}
+  .input-first .sheet-group{padding-bottom:8px}
+  .input-first .sheet-group h2{margin-bottom:4px}
+  .input-first .group-note{margin-bottom:4px}
   .input-first #code-form{margin-top:0}
   .input-first #code-form>label{margin-bottom:4px}
   .input-first #cdk{padding:7px 12px}
   .input-first #code-form .actions{margin-top:8px}
   .input-first #code-form .btn{padding:7px 16px}
+  .input-first .sheet-foot{padding-top:12px}
 }

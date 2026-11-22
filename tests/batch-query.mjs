@@ -7,7 +7,7 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const puppeteer = (await import(pathToFileURL(process.env.PUPPETEER_CORE || '/tmp/pwtest/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js').href)).default;
 const artifacts = process.env.ARTIFACTS || '/opt/cursor/artifacts';
-const input = ['AAA','MoMoDa-AAA','','BBB','MoMoDa-','CCC','DDD','EEE','FFF','GGG','HHH','III','JJJ','KKK'].join('\n');
+const input = ['pan-AAA','PAN-AAA','','Pan-BBB','pan-','Momoda-BBB','RAWKEY','xxpan-CCC','pan-CCC','PAN-DDD','pAn-EEE','Pan-FFF','pan-GGG','PAN-HHH','Pan-III','pan-JJJ','PAN-KKK'].join('\n');
 let posts = [];
 
 function type(file){
@@ -87,7 +87,7 @@ try {
  check('locked count', await stat(page,'已锁定')==='1');
  check('failure count', await stat(page,'查询失败')==='1');
  check('pending count', await stat(page,'状态待确认')==='2');
- check('invalid count', await stat(page,'无法识别')==='1');
+ check('invalid rows say only CKD 有异常', (await page.$eval('#invalid-keys', el => el.textContent))==='CKD 有异常');
  const text = await page.evaluate(() => document.body.innerText);
  check('counts reconcile', ['11','3','2','1','1','1','1','2','1'].every((n,i)=>[
   '输入','找到订单','未找到订单','已禁用','已过期','已锁定','查询失败','状态待确认','无法识别'
@@ -102,9 +102,11 @@ check('no unused-stock category', !labels.some(label => label.includes('未使�
  check('card stays masked', text.includes('•••• 4242') && !text.includes('4242424242424242'));
  await page.click('#copy-missing');
  const missing = await page.evaluate(() => window.__copied);
- check('copy missing codes only', missing==='BBB\nGGG', missing);
+ check('copy missing codes only', missing==='Pan-BBB\npan-GGG', missing);
  await page.click('#copy-failed');
- check('copy failed code only', await page.evaluate(() => window.__copied)==='FFF');
+ check('copy failed code only', await page.evaluate(() => window.__copied)==='Pan-FFF');
+ const results = await page.$eval('#query-results', el => el.textContent);
+ check('invalid keys are not shown', !results.includes('Momoda-BBB') && !results.includes('RAWKEY') && !results.includes('xxpan-CCC') && results.includes('CKD 有异常'));
  await page.click('.query-copy');
  const orderCopy = await page.evaluate(() => window.__copied);
  check('order copy excludes other codes and session', orderCopy.includes('ORD-AAA') && !orderCopy.includes('BBB') && !orderCopy.includes('synthetic') && !orderCopy.includes('4242424242424242'));
@@ -118,7 +120,7 @@ check('no unused-stock category', !labels.some(label => label.includes('未使�
  const failed = await open();
  await failed.click('#query-tab');
  await failed.waitForSelector('#query-cdks');
- await failed.evaluate(() => {document.getElementById('query-cdks').value='NET'});
+ await failed.evaluate(() => {document.getElementById('query-cdks').value='Pan-NET'});
  await failed.click('#query-form button[type=submit]');
  await failed.waitForSelector('#retry-failed');
  check('network failure is not counted as missing', await stat(failed,'未找到订单')==='0' && await stat(failed,'查询失败')==='1');

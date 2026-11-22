@@ -77,25 +77,28 @@ async function open(pathname){
 async function layout(page, label){
   const box = await page.evaluate(() => {
     const card = document.querySelector('.main-card');
-    const stepper = document.querySelector('.stepper');
+    const groups = document.querySelector('.sheet-groups');
     const stage = document.getElementById('stage');
     const btn = document.querySelector('.main-card .btn');
     const header = document.querySelector('header');
     const cardBox = card.getBoundingClientRect();
+    const code = document.getElementById('cdk');
+    const locked = document.querySelector('.sheet-group.is-locked');
     return {
-      journey: !!document.querySelector('.journey, .side-note'),
-      stepperInCard: card.contains(stepper),
-      stepperBeforeStage: !!(stepper.compareDocumentPosition(stage) & Node.DOCUMENT_POSITION_FOLLOWING),
+      journey: !!document.querySelector('.journey, .side-note, .intro, .assurance'),
+      groupsInCard: !!(groups && card.contains(groups) && stage.contains(groups)),
+      codeBeforeLocked: !!(code && locked && (code.compareDocumentPosition(locked) & Node.DOCUMENT_POSITION_FOLLOWING)),
       centerDelta: Math.abs((cardBox.left + cardBox.right) / 2 - window.innerWidth / 2),
       btn: getComputedStyle(btn).backgroundColor,
       header: getComputedStyle(header).backgroundColor,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       caption: document.getElementById('step-caption').textContent,
-      step: stage.dataset.step
+      step: stage.dataset.step,
+      session: !!document.getElementById('session')
     };
   });
-  check(label+' no sidebar', box.journey === false, JSON.stringify(box));
-  check(label+' stepper above form', box.stepperInCard && box.stepperBeforeStage);
+  check(label+' no sidebar or hero', box.journey === false, JSON.stringify(box));
+  check(label+' code group before locked login', box.groupsInCard && box.codeBeforeLocked && box.session === false);
   check(label+' form centered', box.centerDelta < 24, String(box.centerDelta));
   check(label+' blue button', box.btn === 'rgb(0, 113, 227)', box.btn);
   check(label+' dark subscription bar', box.header.includes('22, 22, 23'), box.header);
@@ -113,7 +116,7 @@ try {
   check('first step is not a script back', !/history\.back|javascript:/i.test(backHref));
   await page.screenshot({path:path.join(artifacts, 'recharge-desktop-step1.png')});
 
-  await page.type('#cdk', 'TEST-CDK-ALPHA');
+  await page.type('#cdk', 'Pan-TEST-CDK-ALPHA');
   await page.click('#code-form button[type=submit]');
   await page.waitForSelector('#session');
   check('reached login step', await page.$eval('#stage', s => s.dataset.step) === '2');
@@ -121,7 +124,7 @@ try {
   await page.click('#step-back');
   await page.waitForSelector('#cdk');
   check('back from login stays on recharge', page.url().includes('redeem.html'));
-  check('back from login keeps CDK', await page.$eval('#cdk', el => el.value) === 'TEST-CDK-ALPHA');
+  check('back from login keeps CDK', await page.$eval('#cdk', el => el.value) === 'Pan-TEST-CDK-ALPHA');
   check('back from login is not browser back', page.__backCalls() === 0);
 
   await page.click('#code-form button[type=submit]');

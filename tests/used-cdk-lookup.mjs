@@ -131,7 +131,7 @@ try {
  check('first screen does not ask for session', first.session===false && !first.text.includes('Session JSON'));
  check('consumed error is not shown before submit', !first.text.includes('该CDK兑换已完成'));
 
- await fill(page, 'USED-OK');
+ await fill(page, 'Pan-USED-OK');
  const before = calls.length;
  let releaseOk;
  waits.set('USED-OK:queryOrder', new Promise(resolve => {releaseOk = resolve}));
@@ -176,7 +176,7 @@ try {
  await page.screenshot({path:path.join(artifacts, 'used-cdk-desktop-success.png')});
 
  const mobile = await open(390, 844);
- await fill(mobile, 'USED-OK');
+ await fill(mobile, 'Pan-USED-OK');
  await submit(mobile);
  await mobile.waitForSelector('#lookup-time');
  await mobile.waitForFunction(() => {
@@ -196,12 +196,13 @@ try {
 
  async function lookup(value, width=1280, height=800){
   const next = await open(width, height);
-  await fill(next, value);
+  const trimmed=String(value).trim();
+  await fill(next, /^pan-/i.test(trimmed)?value:'Pan-'+trimmed);
   await submit(next);
   await next.waitForFunction(() => document.getElementById('lookup-result') || !document.getElementById('alert').hidden);
   return next;
  }
- const zone = await lookup('  momoda-USED-ZONE  ');
+ const zone = await lookup('  PAN-USED-ZONE  ');
  await zone.waitForSelector('#lookup-product');
  const zoneText = await zone.evaluate(() => document.body.innerText);
  check('zone-less timestamp stays Beijing time', (await visible(zone,'lookup-time')).text.includes('2026/11/19 21:42:18 北京时间'));
@@ -253,30 +254,31 @@ try {
  await manual.waitForSelector('#lookup-manual');
  await manual.click('#lookup-manual');
  await manual.waitForSelector('#query-cdks');
- check('manual query opens with the same code', await manual.$eval('#query-cdks', el => el.value)==='USED-OK');
+ check('manual query opens with the same code', await manual.$eval('#query-cdks', el => el.value)==='Pan-USED-OK');
  check('manual query still has no session field', await manual.$('#session')===null);
 
- const another = await lookup('MoMoDa-MoMoDa-aBcD');
- check('double prefix strips once and keeps the key case', sent('verifyCdk','MoMoDa-aBcD').length===1 && sent('queryOrder','MoMoDa-aBcD').at(-1).body.cdks[0]==='MoMoDa-aBcD');
+ const another = await lookup('Pan-Pan-aBcD');
+ check('pan prefix strips once and keeps the key case', sent('verifyCdk','Pan-aBcD').length===1 && sent('queryOrder','Pan-aBcD').at(-1).body.cdks[0]==='Pan-aBcD');
  await another.click('#lookup-another');
  await another.waitForSelector('#cdk');
- await fill(another, 'MOMODA-ZzKey');
+ await fill(another, 'PAN-ZzKey');
  await submit(another);
  await another.waitForSelector('#lookup-product');
- check('uppercase prefix strips once', sent('verifyCdk','ZzKey').at(-1).body.cdk==='ZzKey' && sent('queryOrder','ZzKey').at(-1).body.cdks[0]==='ZzKey');
+ check('uppercase Pan prefix strips once', sent('verifyCdk','ZzKey').at(-1).body.cdk==='ZzKey' && sent('queryOrder','ZzKey').at(-1).body.cdks[0]==='ZzKey');
  await another.click('#lookup-another');
  await another.waitForSelector('#cdk');
+ const rawMark = calls.length;
  await fill(another, 'RAW-AbCkey');
  await submit(another);
- await another.waitForSelector('#lookup-product');
- check('raw code is queried unchanged', sent('verifyCdk','RAW-AbCkey').at(-1).body.cdk==='RAW-AbCkey');
+ await another.waitForFunction(() => document.getElementById('alert').textContent==='CKD 有异常');
+ check('raw code is not queried', calls.length===rawMark && await another.$('#lookup-product')===null);
 
  const blank = await open(1280, 800);
  const mark = calls.length;
- await fill(blank, 'MoMoDa-');
+ await fill(blank, 'Pan-');
  await submit(blank);
- await blank.waitForFunction(() => !document.getElementById('alert').hidden);
- check('empty prefix does not call the api', calls.length===mark && (await blank.evaluate(() => document.getElementById('alert').textContent)).includes('MoMoDa-'));
+ await blank.waitForFunction(() => document.getElementById('alert').textContent==='CKD 有异常');
+ check('empty suffix does not call the api', calls.length===mark && (await blank.evaluate(() => document.getElementById('alert').textContent))==='CKD 有异常');
 
  async function staysError(value, snippet){
   const next = await lookup(value);
@@ -303,7 +305,7 @@ try {
  const race = await open(1280, 800);
  let releaseRace;
  waits.set('RACE-CDK:queryOrder', new Promise(resolve => {releaseRace = resolve}));
- await fill(race, 'RACE-CDK');
+ await fill(race, 'Pan-RACE-CDK');
  await race.evaluate(() => {
   const form = document.getElementById('code-form');
   form.requestSubmit();
@@ -326,7 +328,7 @@ try {
  check('duplicate retry sends one query', sent('queryOrder','RACE-CDK').length===retryMark+1, String(sent('queryOrder','RACE-CDK').length));
 
  const live = await open(1280, 800);
- await fill(live, 'LIVE-OK');
+ await fill(live, 'Pan-LIVE-OK');
  await submit(live);
  await live.waitForSelector('#session');
  check('unused code still reaches session', await live.$eval('#stage', el => el.dataset.step)==='2');

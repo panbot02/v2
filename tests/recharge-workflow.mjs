@@ -116,7 +116,7 @@ try {
   check('first step is not a script back', !/history\.back|javascript:/i.test(backHref));
   await page.screenshot({path:path.join(artifacts, 'recharge-desktop-step1.png')});
 
-  await page.type('#cdk', 'TEST-CDK-ALPHA');
+  await page.type('#cdk', 'Pan-TEST-CDK-ALPHA');
   await page.click('#code-form button[type=submit]');
   await page.waitForSelector('#session');
   check('reached login step', await page.$eval('#stage', s => s.dataset.step) === '2');
@@ -124,7 +124,7 @@ try {
   await page.click('#step-back');
   await page.waitForSelector('#cdk');
   check('back from login stays on recharge', page.url().includes('redeem.html'));
-  check('back from login keeps CDK', await page.$eval('#cdk', el => el.value) === 'TEST-CDK-ALPHA');
+  check('back from login keeps CDK', await page.$eval('#cdk', el => el.value) === 'Pan-TEST-CDK-ALPHA');
   check('back from login is not browser back', page.__backCalls() === 0);
 
   await page.click('#code-form button[type=submit]');

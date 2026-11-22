@@ -87,7 +87,7 @@ try {
 
  await page.evaluate(() => {
   const field = document.getElementById('cdk');
-  field.value = 'SHEET-NEW';
+  field.value = 'Pan-SHEET-NEW';
   field.dispatchEvent(new Event('input', {bubbles:true}));
  });
  await page.click('#code-form button[type=submit]');
@@ -123,7 +123,7 @@ try {
  await page.screenshot({path:path.join(artifacts, 'sheet-confirm-desktop.png')});
 
  const used = await open(1280, 800);
- await used.evaluate(() => {const field=document.getElementById('cdk'); field.value='SHEET-USED'; field.dispatchEvent(new Event('input',{bubbles:true}));});
+ await used.evaluate(() => {const field=document.getElementById('cdk'); field.value='Pan-SHEET-USED'; field.dispatchEvent(new Event('input',{bubbles:true}));});
  await used.click('#code-form button[type=submit]');
  await used.waitForSelector('#lookup-time');
  const usedText = await used.evaluate(() => document.body.innerText);
@@ -131,7 +131,7 @@ try {
  check('used code does not open session', await used.$('#session')===null);
  await used.screenshot({path:path.join(artifacts, 'sheet-used-desktop.png')});
  const usedMobile = await open(390, 844);
- await usedMobile.evaluate(() => {const field=document.getElementById('cdk'); field.value='SHEET-USED'; field.dispatchEvent(new Event('input',{bubbles:true}));});
+ await usedMobile.evaluate(() => {const field=document.getElementById('cdk'); field.value='Pan-SHEET-USED'; field.dispatchEvent(new Event('input',{bubbles:true}));});
  await usedMobile.click('#code-form button[type=submit]');
  await usedMobile.waitForSelector('#lookup-time');
  const usedOverflow = await usedMobile.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

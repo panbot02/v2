@@ -52,10 +52,6 @@ async function open(pathname){
   const page = await browser.newPage();
   await page.evaluateOnNewDocument(() => localStorage.setItem('t', 'light'));
   await page.setViewport({width:1280, height:800, deviceScaleFactor:1});
-  let backCalls = 0;
-  await page.exposeFunction('__countBack', () => {backCalls += 1;});
-  await page.evaluateOnNewDocument(() => {history.back = () => window.__countBack();});
-  page.__backCalls = () => backCalls;
   await page.setRequestInterception(true);
   page.on('request', async request => {
     const target = request.url();
@@ -111,9 +107,8 @@ try {
   const page = await open(`/redeem.html?Sales=${sales}`);
   const step1 = await layout(page, 'desktop step 1');
   check('desktop starts on step 1', step1.step === '1' && step1.caption === '验证兑换码');
-  const backHref = await page.$eval('#step-back', a => a.getAttribute('href'));
-  check('first step links to subscription', backHref === `/index.html?Sales=${sales}`, backHref);
-  check('first step is not a script back', !/history\.back|javascript:/i.test(backHref));
+  const backControl = await page.$eval('#step-back', el => ({tag:el.tagName, href:el.getAttribute('href')||''}));
+  check('first step back matches browser history', backControl.tag==='BUTTON' && !/javascript:/i.test(backControl.href), JSON.stringify(backControl));
   await page.screenshot({path:path.join(artifacts, 'recharge-desktop-step1.png')});
 
   await page.type('#cdk', 'Pan-TEST-CDK-ALPHA');
@@ -125,7 +120,7 @@ try {
   await page.waitForSelector('#cdk');
   check('back from login stays on recharge', page.url().includes('redeem.html'));
   check('back from login keeps CDK', await page.$eval('#cdk', el => el.value) === 'Pan-TEST-CDK-ALPHA');
-  check('back from login is not browser back', page.__backCalls() === 0);
+  check('back from login uses the code history step', await page.evaluate(() => history.state?.step)==='code');
 
   await page.click('#code-form button[type=submit]');
   await page.waitForSelector('#session');
@@ -136,7 +131,7 @@ try {
   await page.click('#step-back');
   await page.waitForSelector('#session');
   check('back from confirm keeps login text', await page.$eval('#session', el => el.value) === sessionText);
-  check('back from confirm stays on recharge', page.url().includes('redeem.html') && page.__backCalls() === 0);
+  check('back from confirm stays on recharge', page.url().includes('redeem.html') && await page.evaluate(() => history.state?.step)==='session');
   const stored = await page.evaluate(() => sessionStorage.getItem('jmm.redeem.flow.v1') || '');
   check('login text is not stored', !stored.includes('synthetic-session-token') && !stored.includes('accessToken'));
 
@@ -184,10 +179,11 @@ try {
   check('hash sales is preserved', hashHref === 'https://panbot02.github.io/v2/?Sales=HashSale88', hashHref);
   const failed = await open(`/redeem.html?Sales=${sales}#preview=failed`);
   check('failed order has no promo', await failed.$('.service-promo') === null);
-  const home = await open(`/redeem.html?Sales=${encodeURIComponent(sales)}`);
+  const home = await open(`/index.html?Sales=${encodeURIComponent(sales)}`);
+  await Promise.all([home.waitForNavigation({waitUntil:'networkidle0'}), home.click('#self-redeem')]);
+  check('pricing opens recharge', home.url().includes('/redeem.html') && home.url().includes(`Sales=${sales}`), home.url());
   await Promise.all([home.waitForNavigation({waitUntil:'networkidle0'}), home.click('#step-back')]);
-  check('first step opens subscription page', home.url().includes('/index.html') && home.url().includes(`Sales=${sales}`), home.url());
-  check('opening subscription did not call browser back', home.__backCalls() === 0);
+  check('first step back returns to pricing', home.url().includes('/index.html') && home.url().includes(`Sales=${sales}`), home.url());
 } finally {
   await browser.close();
   server.close();

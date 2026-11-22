@@ -18,5 +18,35 @@ header{position:sticky;top:0;z-index:30;background:rgba(22,22,23,.86);color:#e8e
 .preview-note strong,.preview-note>span{display:block}.preview-note strong{font-size:13px}.preview-note>span{margin:3px 0 8px}.preview-controls{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin:8px auto}.preview-controls a{display:inline-block;margin:0;padding:5px 11px;background:rgba(255,255,255,.6);border:1px solid #68420c22;border-radius:999px;color:#4c3210;font-size:11px;font-weight:500}.preview-controls a:hover{background:#fff}.preview-note>.sales-link{display:inline-block;margin:4px 0}.preview-note{padding:12px 20px}
 
 #lookup-result{scroll-margin-top:68px}
+/* Single recharge card: product line, then numbered groups. */
+.recharge-sheet{max-width:720px;margin:28px auto 0}
+.sheet-head{display:flex;align-items:flex-start;gap:14px;padding:6px 2px 16px}
+.sheet-head img{width:48px;height:48px;object-fit:contain;flex:none;border-radius:12px}
+.sheet-head h1{margin:0}
+.sheet-head p{margin:6px 0 0;color:var(--muted)}
+.sheet-groups{list-style:none;margin:8px 0 0;padding:0}
+.sheet-group{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;position:relative;padding:0 0 22px}
+.sheet-group:not(:last-child):before{content:"";position:absolute;left:13px;top:32px;bottom:0;width:1px;background:var(--line)}
+.gnum{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--blue);color:#fff;border:1px solid var(--blue);line-height:1}
+.sheet-group.is-locked .gnum,.sheet-group.is-done .gnum{background:var(--soft);color:var(--muted);border-color:var(--line)}
+.sheet-group h2{margin:2px 0 10px}
+.group-note{margin:0 0 10px;color:var(--muted)}
+.lock-field{width:100%;min-height:96px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--dim);padding:12px}
+.link-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--soft);border-radius:12px;padding:8px 8px 8px 12px;margin:0 0 12px}
+.link-row code{flex:1;min-width:140px;background:none;overflow-wrap:anywhere}
+.risk-note{margin:12px 0;padding:10px 12px;border-radius:12px;background:#fff1f0;color:#9f1239}
+[data-t=dark] .risk-note{background:#3a171c;color:#ffb4c0}
+.file-btn{cursor:pointer}
+.sheet-group .upload{margin-top:8px}
+.sheet-foot{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding-top:8px}
+.sheet-foot .wechat{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0}
+.sheet-foot .wechat .btn{padding:8px 14px}
+@media(max-width:740px){
+  .recharge-sheet{margin-top:16px}
+  .sheet-head{gap:10px}
+  .sheet-head img{width:40px;height:40px}
+  .link-row{align-items:stretch}
+  .link-row .btn{width:100%;text-align:center}
+}
 /* Inline submission feedback: preserve the active step, form and confirmation. */
 .button-spinner{display:inline-block;width:14px;height:14px;flex:none;vertical-align:-2px;margin-right:8px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:button-spin .75s linear infinite}.btn[aria-busy="true"]{display:inline-flex;align-items:center;justify-content:center;opacity:.8;cursor:wait}#stage[aria-busy="true"] input,#stage[aria-busy="true"] textarea{opacity:.8}@keyframes button-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.button-spinner{animation:none}}

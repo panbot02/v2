@@ -77,25 +77,28 @@ async function open(pathname){
 async function layout(page, label){
   const box = await page.evaluate(() => {
     const card = document.querySelector('.main-card');
-    const stepper = document.querySelector('.stepper');
+    const groups = document.querySelector('.sheet-groups');
     const stage = document.getElementById('stage');
     const btn = document.querySelector('.main-card .btn');
     const header = document.querySelector('header');
     const cardBox = card.getBoundingClientRect();
+    const code = document.getElementById('cdk');
+    const locked = document.querySelector('.sheet-group.is-locked');
     return {
-      journey: !!document.querySelector('.journey, .side-note'),
-      stepperInCard: card.contains(stepper),
-      stepperBeforeStage: !!(stepper.compareDocumentPosition(stage) & Node.DOCUMENT_POSITION_FOLLOWING),
+      journey: !!document.querySelector('.journey, .side-note, .intro, .assurance'),
+      groupsInCard: !!(groups && card.contains(groups) && stage.contains(groups)),
+      codeBeforeLocked: !!(code && locked && (code.compareDocumentPosition(locked) & Node.DOCUMENT_POSITION_FOLLOWING)),
       centerDelta: Math.abs((cardBox.left + cardBox.right) / 2 - window.innerWidth / 2),
       btn: getComputedStyle(btn).backgroundColor,
       header: getComputedStyle(header).backgroundColor,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       caption: document.getElementById('step-caption').textContent,
-      step: stage.dataset.step
+      step: stage.dataset.step,
+      session: !!document.getElementById('session')
     };
   });
-  check(label+' no sidebar', box.journey === false, JSON.stringify(box));
-  check(label+' stepper above form', box.stepperInCard && box.stepperBeforeStage);
+  check(label+' no sidebar or hero', box.journey === false, JSON.stringify(box));
+  check(label+' code group before locked login', box.groupsInCard && box.codeBeforeLocked && box.session === false);
   check(label+' form centered', box.centerDelta < 24, String(box.centerDelta));
   check(label+' blue button', box.btn === 'rgb(0, 113, 227)', box.btn);
   check(label+' dark subscription bar', box.header.includes('22, 22, 23'), box.header);

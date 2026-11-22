@@ -7,7 +7,7 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const puppeteer = (await import(pathToFileURL(process.env.PUPPETEER_CORE || '/tmp/pwtest/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js').href)).default;
 const artifacts = process.env.ARTIFACTS || '/opt/cursor/artifacts';
-const input = ['pan-AAA','PAN-AAA','','Pan-BBB','pan-','Momoda-BBB','RAWKEY','xxpan-CCC','pan-CCC','PAN-DDD','pAn-EEE','Pan-FFF','pan-GGG','PAN-HHH','Pan-III','pan-JJJ','PAN-KKK'].join('\n');
+const input = ['pan-AAA','PAN-AAA','','Pan-BBB','pan-','Momoda-BBB','pan-CCC','PAN-DDD','pAn-EEE','Pan-FFF','pan-GGG','PAN-HHH','Pan-III','pan-JJJ','PAN-KKK'].join('\n');
 let posts = [];
 
 function type(file){
@@ -87,7 +87,7 @@ try {
  check('locked count', await stat(page,'已锁定')==='1');
  check('failure count', await stat(page,'查询失败')==='1');
  check('pending count', await stat(page,'状态待确认')==='2');
- check('invalid rows say only CKD 有异常', (await page.$eval('#invalid-keys', el => el.textContent))==='CKD 有异常');
+ check('empty suffix is a normal validation error', (await page.$eval('#format-invalid', el => el.textContent))==='请输入有效的兑换码。');
  const text = await page.evaluate(() => document.body.innerText);
  check('counts reconcile', ['11','3','2','1','1','1','1','2','1'].every((n,i)=>[
   '输入','找到订单','未找到订单','已禁用','已过期','已锁定','查询失败','状态待确认','无法识别'
@@ -106,7 +106,7 @@ check('no unused-stock category', !labels.some(label => label.includes('未使�
  await page.click('#copy-failed');
  check('copy failed code only', await page.evaluate(() => window.__copied)==='Pan-FFF');
  const results = await page.$eval('#query-results', el => el.textContent);
- check('invalid keys are not shown', !results.includes('Momoda-BBB') && !results.includes('RAWKEY') && !results.includes('xxpan-CCC') && results.includes('CKD 有异常'));
+ check('duplicate Momoda line is not listed again', !results.includes('Momoda-BBB') && await page.$('#invalid-keys')===null);
  await page.click('.query-copy');
  const orderCopy = await page.evaluate(() => window.__copied);
  check('order copy excludes other codes and session', orderCopy.includes('ORD-AAA') && !orderCopy.includes('BBB') && !orderCopy.includes('synthetic') && !orderCopy.includes('4242424242424242'));

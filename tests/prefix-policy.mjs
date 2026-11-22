@@ -1,4 +1,4 @@
-// Pan- prefix checks. Synthetic codes and mocked responses only.
+// Used-code prefix rule. Synthetic codes and mocked responses only.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,6 +14,12 @@ function type(file){
  return 'text/html; charset=utf-8';
 }
 function cors(origin){return {'Access-Control-Allow-Origin':origin||'*','Access-Control-Allow-Headers':'Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS'}}
+function verifyFor(cdk){
+ if(cdk==='USED' || cdk==='aBcD') return {code:0, error:'该CDK兑换已完成，请查询订单'};
+ if(cdk==='MISSING') return {code:0, error:'CDK 不存在或不可用'};
+ if(cdk==='LOCKED') return {code:0, error:'CDK 正在使用中，请稍后再试'};
+ return {code:200, data:{activation_token:'act', expires_in:900, expires_at:'2026-11-20T12:00:00Z', provider:'openai', product_name:'ChatGPT Plus', plan:'chatgptplusplan'}};
+}
 const server = http.createServer((req, res) => {
  const url = new URL(req.url, 'http://127.0.0.1');
  const file = path.join(root, decodeURIComponent(url.pathname).replace(/^\/+/, '') || 'index.html');
@@ -40,18 +46,18 @@ async function open(){
   let body = {};
   try{body = JSON.parse(request.postData()||'{}')}catch{}
   calls.push({name, body, cdk: body.cdk || body.cdks?.[0] || ''});
-  if(name==='verifyCdk' && body.cdk==='USED'){
-   return request.respond({status:200, contentType:'application/json', headers:cors(origin), body:JSON.stringify({code:0, error:'该CDK兑换已完成，请查询订单'})});
-  }
   if(name==='verifyCdk'){
-   return request.respond({status:200, contentType:'application/json', headers:cors(origin), body:JSON.stringify({code:200, data:{activation_token:'act', expires_in:900, expires_at:'2026-11-20T12:00:00Z', provider:'openai', product_name:'ChatGPT Plus', plan:'chatgptplusplan'}})});
+   const payload = verifyFor(body.cdk);
+   return request.respond({status:200, contentType:'application/json', headers:cors(origin), body:JSON.stringify(payload)});
   }
   if(name==='queryOrder'){
-   const cdk = body.cdks?.[0];
-   const order = cdk==='KEEP'
-    ? {status:'success', account:'buyer@example.com', product_name:'ChatGPT Plus', plan:'chatgptplusplan', finished_at:'2026-11-19T13:42:18Z', order_no:'ORD-KEEP', cdk}
-    : null;
-   return request.respond({status:200, contentType:'application/json', headers:cors(origin), body:JSON.stringify({code:200, error:'', results:[{cdk, code:200, error:'', cdk_status:order?'activated':'unused', product_name:order?'ChatGPT Plus':null, plan:order?'chatgptplusplan':null, order}]})});
+   const results = (body.cdks||[]).map(cdk => ({
+    cdk, code:200, error:'', cdk_status: cdk==='FRESH' || cdk==='GONE' ? 'unused' : 'activated',
+    product_name: cdk==='FRESH' || cdk==='GONE' ? null : 'ChatGPT Plus',
+    plan: cdk==='FRESH' || cdk==='GONE' ? null : 'chatgptplusplan',
+    order: cdk==='FRESH' || cdk==='GONE' ? null : {status:'success', account:'buyer@example.com', product_name:'ChatGPT Plus', plan:'chatgptplusplan', finished_at:'2026-11-19T13:42:18Z', order_no:'ORD-'+cdk, cdk}
+   }));
+   return request.respond({status:200, contentType:'application/json', headers:cors(origin), body:JSON.stringify({code:200, error:'', results})});
   }
   return request.respond({status:500, contentType:'application/json', headers:cors(origin), body:'{}'});
  });
@@ -59,6 +65,7 @@ async function open(){
  return page;
 }
 async function submitCode(page, value){
+ await page.waitForSelector('#cdk');
  await page.evaluate(v => {
   const field = document.getElementById('cdk');
   field.value = v;
@@ -66,58 +73,69 @@ async function submitCode(page, value){
   document.getElementById('code-form').requestSubmit();
  }, value);
 }
+function postsFor(name, cdk){return calls.filter(item => item.name===name && item.cdk===cdk)}
 
 try {
  const page = await open();
- const before = calls.length;
- for(const bad of ['Momoda-AbC', 'momoda-AbC', 'RAWKEY', 'Pan-', 'xxPan-AbC', '  bare-key  ']){
+ for(const sample of ['FRESH', 'Momoda-FRESH', 'PAN-FRESH']){
   const mark = calls.length;
-  await submitCode(page, bad);
-  await page.waitForFunction(() => document.getElementById('alert').textContent==='CKD 有异常');
-  check(bad+' makes no request', calls.length===mark);
-  check(bad+' message is exact', await page.$eval('#alert', el => el.textContent)==='CKD 有异常');
+  await submitCode(page, sample);
+  await page.waitForSelector('#session');
+  check(sample+' unused reaches session', await page.$eval('#stage', el => el.dataset.step)==='2');
+  check(sample+' is sent without its prefix', postsFor('verifyCdk','FRESH').at(-1).body.cdk==='FRESH' && calls.length===mark+1);
+  await page.click('#step-back');
+  await page.waitForSelector('#cdk');
  }
- check('denied inputs added no calls', calls.length===before);
 
- await submitCode(page, 'Pan-KEEP');
- await page.waitForSelector('#session');
- check('Pan- strips once and keeps case', calls.at(-1).body.cdk==='KEEP');
- const shown = await page.$eval('#sheet-intro', el => el.textContent);
- check('verified head names the product', shown.includes('ChatGPT Plus'));
- await page.click('#step-back');
+ await submitCode(page, 'Pan-aBcD');
+ await page.waitForSelector('#lookup-time');
+ check('used Pan- shows the order', (await page.$eval('#lookup-time', el => el.textContent)).includes('北京时间') && postsFor('queryOrder','aBcD').length===1);
+ check('used Pan- keeps the key case', postsFor('verifyCdk','aBcD').at(-1).body.cdk==='aBcD');
+ await page.click('#lookup-retry');
+ await page.waitForFunction(() => document.querySelectorAll('#lookup-time').length>0 && !document.getElementById('stage').getAttribute('aria-busy'));
+ check('Pan recovery retries the normalized key', postsFor('queryOrder','aBcD').length===2 && postsFor('verifyCdk','aBcD').length===1);
+
+ await page.click('#lookup-another');
  await page.waitForSelector('#cdk');
- await submitCode(page, 'Momoda-KEEP');
+ const beforeMomoda = postsFor('queryOrder','USED').length;
+ await submitCode(page, 'Momoda-USED');
  await page.waitForFunction(() => document.getElementById('alert').textContent==='CKD 有异常');
- const afterBad = await page.evaluate(() => ({
-  intro: document.getElementById('sheet-intro').textContent,
-  session: !!document.getElementById('session'),
-  product: document.body.innerText.includes('ChatGPT Plus')
- }));
- check('invalid input clears the verified product', afterBad.intro!==shown && !afterBad.intro.includes('ChatGPT Plus') && afterBad.session===false && afterBad.product===false, JSON.stringify(afterBad));
+ const momodaView = await page.evaluate(() => ({alert:document.getElementById('alert').textContent, order:document.body.innerText.includes('ORD-USED'), product:!!document.getElementById('lookup-product'), session:!!document.getElementById('session')}));
+ check('used Momoda- is only CKD 有异常', momodaView.alert==='CKD 有异常' && momodaView.order===false && momodaView.product===false && momodaView.session===false, JSON.stringify(momodaView));
+ check('used Momoda- is verified and not queried', postsFor('verifyCdk','USED').length===1 && postsFor('queryOrder','USED').length===beforeMomoda);
+
+ await submitCode(page, 'USED');
+ await page.waitForFunction(() => document.getElementById('alert').textContent==='CKD 有异常');
+ check('used raw code is not queried', postsFor('queryOrder','USED').length===beforeMomoda && !((await page.evaluate(() => document.body.innerText)).includes('ORD-USED')));
+
+ const missingMark = calls.length;
+ await submitCode(page, 'Momoda-MISSING');
+ await page.waitForFunction(() => !document.getElementById('alert').hidden);
+ const missingAlert = await page.$eval('#alert', el => el.textContent);
+ check('missing code keeps the real error', missingAlert==='CDK 不存在或不可用' && missingAlert!=='CKD 有异常' && calls.length===missingMark+1);
+ await submitCode(page, 'LOCKED');
+ await page.waitForFunction(() => document.getElementById('alert').textContent.includes('正在使用中'));
+ check('locked code is not called used', (await page.$eval('#alert', el => el.textContent))!=='CKD 有异常');
+
+ const emptyMark = calls.length;
+ await submitCode(page, 'Pan-');
+ await page.waitForFunction(() => document.getElementById('alert').textContent==='请输入有效的兑换码。');
+ check('empty Pan- suffix is not sent', calls.length===emptyMark);
+ await submitCode(page, 'xxPan-FRESH');
+ await page.waitForSelector('#session');
+ check('mid-prefix is the whole raw key', postsFor('verifyCdk','xxPan-FRESH').length===1);
 
  await page.click('#query-tab');
  await page.waitForSelector('#query-cdks');
- await page.evaluate(() => {document.getElementById('query-cdks').value='PAN-KEEP\nMomoda-SECRET\nraw-secret'; document.getElementById('query-form').requestSubmit()});
- await page.waitForSelector('.query-summary');
- const mixed = await page.$eval('#query-results', el => el.textContent);
- check('mixed batch queries only the Pan code', calls.filter(item => item.name==='queryOrder').at(-1).body.cdks.join()==='KEEP');
- check('mixed batch hides invalid text', mixed.includes('ORD-KEEP') && mixed.includes('CKD 有异常') && !mixed.includes('Momoda-SECRET') && !mixed.includes('raw-secret'));
- const afterOrders = calls.length;
- await page.evaluate(() => {document.getElementById('query-cdks').value='Momoda-ONLY'; document.getElementById('query-form').requestSubmit()});
- await page.waitForFunction(() => document.getElementById('invalid-keys') && document.getElementById('invalid-keys').textContent==='CKD 有异常');
- const cleared = await page.$eval('#query-results', el => el.textContent);
- check('invalid query clears the previous order', !cleared.includes('ORD-KEEP') && cleared==='CKD 有异常', cleared);
- check('invalid query sends nothing', calls.length===afterOrders);
-
- const recovered = await open();
- await recovered.evaluate(() => {
-  sessionStorage.setItem('jmm.redeem.flow.v1', JSON.stringify({nonce:'abcdefghijklmnopqrstuv', cdk:'KEEP', cdkInput:'not-a-prefix', cdkNormalized:true, uncertain:true}));
- });
- await recovered.reload({waitUntil:'networkidle0'});
- check('raw saved input is not placed in the public field', await recovered.$eval('#cdk', el => el.value)==='');
- await recovered.click('#resume');
- await recovered.waitForFunction(() => document.body.innerText.includes('ORD-KEEP'));
- check('stored normalized key is still queried', calls.filter(item => item.name==='queryOrder' && item.cdk==='KEEP').length>=1);
+ await page.evaluate(() => {document.getElementById('query-cdks').value='Pan-aBcD\nMomoda-USED\nGONE'; document.getElementById('query-form').requestSubmit()});
+ await page.waitForFunction(() => {const box=document.getElementById('query-results'); return box && box.innerText.includes('ORD-aBcD') && box.innerText.includes('CKD 有异常')});
+ const mixed = await page.$eval('#query-results', el => el.innerText);
+ check('batch shows the Pan order only', mixed.includes('ORD-aBcD') && mixed.includes('CKD 有异常') && !mixed.includes('ORD-USED'));
+ check('batch still shows a code with no order', mixed.includes('GONE') && !mixed.includes('ORD-USED'));
+ const copied = await page.evaluate(() => {window.__copied=''; navigator.clipboard.writeText=async text=>{window.__copied=text}; return true});
+ if(await page.$('#copy-missing')) await page.click('#copy-missing');
+ const clip = await page.evaluate(() => window.__copied||'');
+ check('copy does not include the hidden used code', !clip.includes('USED') && !clip.includes('ORD-USED'));
 } finally {
  await browser.close();
  server.close();

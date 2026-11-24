@@ -6,7 +6,8 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const puppeteer = (await import(pathToFileURL(process.env.PUPPETEER_CORE || '/tmp/pwtest/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js').href)).default;
-const warning = '登录凭据等同账号凭证，请勿分享。继续后将通过 HTTPS 交由第三方充值服务处理，用于本次账号核对与充值。';
+const warning = '请仅在信任本服务时提交登录凭据';
+const removed = '登录凭据等同账号凭证';
 const sessionText = '{"accessToken":"synthetic-session-token","user":"not-real"}';
 const forbidden = /easysub|workers\.dev|api\.easysub\.site/i;
 
@@ -41,6 +42,9 @@ const browser = await puppeteer.launch({executablePath:process.env.CHROME || '/u
 const failures = [];
 const check = (name, ok, detail='') => {if(!ok) failures.push(name+(detail?`: ${detail}`:'')); else console.log('ok', name)};
 const page = await browser.newPage();
+const pageErrors = [];
+page.on('pageerror', error => pageErrors.push(String(error)));
+page.on('console', message => { if(message.type()==='error') pageErrors.push(message.text()); });
 await page.setViewport({width:1280, height:900});
 await page.setRequestInterception(true);
 page.on('request', request => {
@@ -82,18 +86,23 @@ function visibleLeak(text){return forbidden.test(text)}
 try {
  await page.goto(base+'/redeem.html?Sales=AgentSale77', {waitUntil:'networkidle0'});
  const initial = await page.evaluate(() => document.body.innerText);
- check('entry shows the third-party warning', initial.includes(warning) && !visibleLeak(initial), initial.slice(0, 240));
- check('entry does not promise secrecy', !initial.includes('不会存储') && !initial.includes('绝对保密') && !initial.includes('不会发给'));
+ check('entry omits the credential block', !initial.includes(removed) && !initial.includes(warning) && !visibleLeak(initial) && await page.$('.risk-note')===null, initial.slice(0, 240));
+ check('entry does not promise secrecy', !initial.includes('不会存储') && !initial.includes('绝对保密') && !initial.includes('不会发给') && !initial.includes('不会发送'));
 
  await submitCode('Pan-OPEN');
  await page.waitForSelector('#session');
- const openai = await page.evaluate(() => ({text:document.body.innerText, url:document.getElementById('session-url').textContent, warning:document.getElementById('session-warning').textContent}));
- check('openai session keeps the warning and login link', openai.warning===warning && openai.url==='https://chatgpt.com/api/auth/session' && openai.text.includes('chatgpt.com') && !visibleLeak(openai.text));
+ const openai = await page.evaluate(() => {
+  const note = document.getElementById('session-warning');
+  const field = document.getElementById('session');
+  const style = getComputedStyle(note);
+  return {text:document.body.innerText, url:document.getElementById('session-url').textContent, warning:note.textContent, next:field.nextElementSibling===note, caption:note.classList.contains('caption'), risk:!!document.querySelector('.risk-note'), bg:style.backgroundColor, size:style.fontSize};
+ });
+ check('openai session keeps a compact note and the login link', openai.warning===warning && openai.next && openai.caption && openai.risk===false && openai.bg==='rgba(0, 0, 0, 0)' && openai.size==='14px' && openai.url==='https://chatgpt.com/api/auth/session' && openai.text.includes('chatgpt.com') && !openai.text.includes(removed) && !visibleLeak(openai.text), JSON.stringify(openai));
  await fill('session', sessionText);
  await page.click('#session-form button[type=submit]');
  await page.waitForSelector('#consent');
  const confirm = await page.evaluate(() => ({text:document.body.innerText, disabled:document.getElementById('confirm').disabled}));
- check('confirm shows the account comparison without the upstream name', confirm.disabled===true && confirm.text.includes('当前会员') && confirm.text.includes('即将充值') && !visibleLeak(confirm.text));
+ check('confirm still gates recharge with consent', confirm.disabled===true && confirm.text.includes('当前会员') && confirm.text.includes('即将充值') && confirm.text.includes('我已核对上述账号') && !confirm.text.includes(removed) && !visibleLeak(confirm.text));
  await page.click('#step-back');
  await page.waitForSelector('#session');
  await backToCode();
@@ -133,6 +142,7 @@ try {
  await page.waitForFunction(() => {const box=document.getElementById('query-results'); return box && box.innerText.includes('暂时失败')});
  const queried = await page.$eval('#query-results', el => el.innerText);
  check('query error hides the service name', queried.includes('暂时失败') && queried.includes('充值服务') && !visibleLeak(queried), queried);
+ check('page has no console errors', pageErrors.length===0, pageErrors.join('\n'));
 } finally {
  await browser.close();
  server.close();

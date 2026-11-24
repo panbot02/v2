@@ -1,8 +1,24 @@
 // 萌萌哒 AI · credentials never leave memory except in requests to the configured service.
 const $=id=>document.getElementById(id), stage=$('stage');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const brandText=v=>String(v??'').replace(/easysub|脚萌萌哒/ig,'萌萌哒 AI');
-const friendly=v=>brandText(typeof v==='string'?v:'这一步暂时没有完成，请稍后再试。');
+function redactService(value){
+ let s=String(value??'');
+ s=s.replace(/https?:\/\/[^\s<>"'，。；;）)]+/gi,'充值服务');
+ s=s.replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi,'充值服务');
+ s=s.replace(/easysub/ig,'充值服务');
+ s=s.replace(/(?:充值服务[\s·,，]*){2,}/g,'充值服务');
+ return s.replace(/[ \t]{2,}/g,' ').trim();
+}
+function leakedPayload(value){return /<[^>]+>/.test(value)||/access[_-]?token|sessionkey|set-cookie|document\.cookie/i.test(value)||(/^\s*[\[{]/.test(value)&&/[}\]]\s*$/.test(value))}
+const brandText=v=>redactService(String(v??'').replace(/脚萌萌哒/ig,'萌萌哒 AI'));
+function friendly(v){
+ if(typeof v!=='string')return '这一步暂时没有完成，请稍后再试。';
+ const raw=v.trim();
+ if(!raw||leakedPayload(raw))return '服务暂不可用，请稍后再试。';
+ const text=brandText(raw);
+ if(!text||text==='充值服务')return '服务暂不可用，请稍后再试。';
+ return text;
+}
 const PLAN={chatgptplusplan:'ChatGPT Plus',chatgptprolite:'ChatGPT Pro 100',chatgptproliteplan:'ChatGPT Pro 100',chatgptpro:'ChatGPT Pro 200',chatgptproplan:'ChatGPT Pro 200',chatgptpromax:'ChatGPT Pro 500',chatgptgoplan:'ChatGPT Go',chatgpt2pro20x:'ChatGPT Pro 200',claudepro:'Claude Pro',claudemax5x:'Claude Max 5x',claudemax20x:'Claude Max 20x',grok_plus:'Plus',grok_premium:'Premium',grok_super:'Super',grok_ultra:'Ultra',PRODUCT_TIER_SUPER_GROK_LITE:'SuperGrok Lite',PRODUCT_TIER_GROK_PRO:'SuperGrok',PRODUCT_TIER_SUPER_GROK_PLUS:'SuperGrok Plus',PRODUCT_TIER_SUPER_GROK_PRO:'SuperGrok Heavy',free:'免费版',Free:'免费版',plus:'Plus',pro:'Pro'};
 const plan=v=>PLAN[v]||brandText(v||'暂未提供');
 const PROVIDER={openai:'ChatGPT',claude:'Claude',grok:'Grok'};
@@ -100,7 +116,7 @@ function syncHead(){
   intro.textContent=title()+'。核对账号后才会充值。';
  }else{mark.hidden=true;intro.textContent='验证兑换码，核对账号后再充值。适用于 ChatGPT、Claude 与 Grok。'}
 }
-function riskNotice(){return '<p class="risk-note" id="session-warning">登录凭据等同账号凭证，请勿发给任何人。继续后会经 HTTPS 送到充值服务商 api.easysub.site，只用于这次核对与充值。请只在信任该服务商时继续。</p>'}
+function riskNotice(){return '<p class="risk-note" id="session-warning">登录凭据等同账号凭证，请勿分享。继续后将通过 HTTPS 交由第三方充值服务处理，用于本次账号核对与充值。</p>'}
 function groups(inner){return '<ol class="sheet-groups">'+inner+'</ol>'}
 function codeGroup(cdkValue,resume){const back=preview?'<a class="text-btn step-back" id="step-back" href="'+esc(salesURL('index.html'))+'">上一步</a>':'<button type="button" class="text-btn step-back" id="step-back">上一步</button>';return '<li class="sheet-group"><span class="gnum">1</span><div><h2>输入兑换码</h2>'+(resume?'<div class="network-note"><b>上次的订单还在这里。</b><p>若上次已提交，请先恢复查询，确认结果后再操作。</p><button class="text-btn" type="button" id="resume">恢复订单查询 ›</button></div>':'')+'<form id="code-form" class="form"><label for="cdk">兑换码（CDK）</label><input id="cdk" class="field cdk-field" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="粘贴你的兑换码" maxlength="500" value="'+esc(cdkValue)+'" required><div class="actions"><button class="btn" type="submit">验证兑换码 <span>→</span></button>'+back+'<button type="button" class="text-btn" id="go-query">已兑换？查询订单 ›</button></div></form><p class="group-note">验证通过后，才能填写并提交登录信息。</p></div></li>'}
 function lockedSessionGroup(){return '<li class="sheet-group is-locked"><span class="gnum">2</span><div><h2>输入登录信息</h2><p class="group-note">兑换码验证通过后，这里会打开对应的 Session 或 Cookie 输入。</p><textarea class="lock-field" disabled placeholder="验证兑换码后填写" aria-disabled="true"></textarea>'+riskNotice()+'</div></li>'}

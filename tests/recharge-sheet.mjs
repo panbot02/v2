@@ -102,7 +102,7 @@ try {
  }));
  check('verified code unlocks session', unlocked.step==='2' && unlocked.disabled===false && unlocked.url==='https://chatgpt.com/api/auth/session' && unlocked.open.startsWith('https://chatgpt.com/api/auth/session'));
  check('unlocked names the returned product', unlocked.product.includes('ChatGPT Plus') && unlocked.text.includes('已验证 ChatGPT Plus'));
- check('unlocked keeps the risk notice truthful', unlocked.text.includes('api.easysub.site') && banned(unlocked.text).length===0, banned(unlocked.text).join(','));
+ check('unlocked keeps the risk notice truthful', unlocked.text.includes('登录凭据等同账号凭证，请勿分享。继续后将通过 HTTPS 交由第三方充值服务处理，用于本次账号核对与充值。') && !/easysub|workers\.dev/i.test(unlocked.text) && banned(unlocked.text).length===0, banned(unlocked.text).join(','));
  await page.screenshot({path:path.join(artifacts, 'sheet-unlocked-desktop.png')});
 
  await page.evaluate(value => {

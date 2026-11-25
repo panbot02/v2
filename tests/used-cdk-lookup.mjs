@@ -270,7 +270,7 @@ try {
  const rawMark = calls.filter(item => item.name==='queryOrder' && item.cdk==='RAW-AbCkey').length;
  await fill(another, 'RAW-AbCkey');
  await submit(another);
- await another.waitForFunction(() => document.getElementById('alert').textContent==='CKD 有异常');
+ await another.waitForFunction(() => document.getElementById('alert').textContent==='兑换码有问题，可以联系销售更换账号');
  check('raw used code is verified and not looked up', calls.some(item => item.name==='verifyCdk' && item.cdk==='RAW-AbCkey') && calls.filter(item => item.name==='queryOrder' && item.cdk==='RAW-AbCkey').length===rawMark && await another.$('#lookup-product')===null);
 
  const blank = await open(1280, 800);
@@ -286,7 +286,7 @@ try {
   check(value+' is not auto-queried', sent('queryOrder', value).length===0 && alert.hidden===false && alert.text.includes(snippet), alert.text);
   check(value+' does not open session', await next.$('#session')===null && await next.$('#lookup-result')===null);
  }
- await staysError('BAD-NONE', 'CDK 不存在或不可用');
+ await staysError('BAD-NONE', '兑换码有问题，可以联系销售更换账号');
  await staysError('BAD-LOCK', 'CDK 正在使用中');
  await staysError('BAD-MAINT', '维护中');
  await staysError('BAD-SWITCH', 'Claude');

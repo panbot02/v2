@@ -65,8 +65,13 @@ function canonicalCdk(value){const key=String(value??'').trim();if(!key)throw ne
 function publicCdkInput(saved){const typed=saved?.cdkInput;if(!typed||!saved?.cdk)return '';try{return normalizeCdk(typed)===saved.cdk?typed:''}catch{return ''}}
 function clearStaleKeyView(){cancelLookup();cdkValid=false;token='';account=null;syncHead();const q=$('query-results');if(q)q.innerHTML='';const look=$('lookup-result');if(look)look.remove();if($('network-note'))$('network-note').hidden=true;}
 function rejectKey(){clearStaleKeyView();err(new Error(codeProblem()));}
-function usedRecord(entry){if(!entry||entry.pan)return false;if(entry.order)return true;const status=String(entry.status||'').toLowerCase();if(status==='activated')return true;return /已兑换/.test(entry.note||'')}
-function concealUsedNonPan(report){let hidden=0;const keep=list=>list.filter(item=>{if(!usedRecord(item))return true;hidden++;return false});report.found=keep(report.found||[]);report.pending=keep(report.pending||[]);if(hidden){report.inputCount=Math.max(0,(report.inputCount||0)-hidden);report.concealed=true}return report}
+function countHiddenOrders(report){
+ report.found=(report.found||[]).map(item=>{
+  if(!item||!item.order||item.pan===true)return item;
+  return {counted:true};
+ });
+ return report;
+}
 let flow=null;try{const p=JSON.parse(safeGet(KEY));if(p&&typeof p.nonce==='string'&&/^[A-Za-z0-9_-]+$/.test(p.nonce)&&p.nonce.length>=22&&p.nonce.length<=86&&typeof p.cdk==='string'){const input=p.cdkInput||'';p.cdk=p.cdkNormalized===true?canonicalCdk(p.cdk):normalizeCdk(p.cdk);p.cdkInput=input;let pan=false;try{const again=readCdk(input);pan=again.pan&&again.key===p.cdk}catch{}p.panOrigin=pan;p.cdkNormalized=true;flow=p}}catch{}
 let token='',account=null,mode='redeem',busy=false,pollId=0,cdkValid=false,zstdPromise=null;
 const rateUntil=new Map();
@@ -225,10 +230,13 @@ function parseQueryInput(text){
  const lines=String(text??'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
  if(!lines.length)return null;
  if(lines.length>50)return {tooMany:true,items:[],invalid:[]};
- const items=[],invalid=[],seen=new Set();
+ const items=[],invalid=[],seen=new Map();
  for(const line of lines){
   let parsed;try{parsed=readCdk(line)}catch{invalid.push(line);continue}
-  if(seen.has(parsed.key))continue;seen.add(parsed.key);items.push({input:line,cdk:parsed.key,pan:parsed.pan});
+  const prev=seen.get(parsed.key);
+  if(prev){if(!parsed.pan)prev.pan=false;continue}
+  const item={input:line,cdk:parsed.key,pan:parsed.pan};
+  seen.set(parsed.key,item);items.push(item);
  }
  return {items,invalid};
 }
@@ -407,10 +415,12 @@ function renderQueryReport(report){
  if(report.locked.length)stats.push(queryStat(report.locked.length,'已锁定'));
  if(report.failed.length)stats.push(queryStat(report.failed.length,'查询失败'));
  if(report.pending.length)stats.push(queryStat(report.pending.length,'状态待确认'));
+ const visible=(report.found||[]).filter(x=>x&&x.order);
  target.innerHTML='<div class="query-summary" aria-label="查询统计">'+stats.join('')+'</div>'+
   (accounted===report.inputCount?'':'<p class="caption">输入 '+report.inputCount+' 个，结果分类合计 '+accounted+' 个。两边不一致时，请不要把差额当成未使用。</p>')+
+  (report.found.length?'<p id="found-count">有'+report.found.length+'个找到订单</p>':'')+
   (report.missing.length?'<p class="query-caveat">未找到订单不代表兑换码未使用、真实存在或可以充值。订单查询只说明有没有最近一笔订单；接口里的 unused 只表示未产生订单。</p>':'')+
-  (report.found.length?report.found.map((x,i)=>resultHTML(x.order)+'<button type="button" class="text-btn query-copy" data-i="'+i+'">复制这笔订单信息</button>').join(''):(report.inputCount?'<div class="empty">没有返回可展示的订单。</div>':''))+
+  (visible.length?visible.map((x,i)=>resultHTML(x.order)+'<button type="button" class="text-btn query-copy" data-i="'+i+'">复制这笔订单信息</button>').join(''):(report.found.length?'':(report.inputCount?'<div class="empty">没有返回可展示的订单。</div>':'')))+
   '<p class="toast" id="query-copy-status" role="status"></p>'+
   codeBucket('未找到订单','这些兑换码没有订单。不能据此判断未使用，也不能直接拿去充值。',report.missing,'copy-missing','复制未找到订单的兑换码')+
   codeBucket('已禁用','这些兑换码已禁用，不能兑换。',report.disabled,'copy-disabled','复制已禁用的兑换码')+
@@ -420,14 +430,14 @@ function renderQueryReport(report){
   (report.failed.length?'<button type="button" class="btn secondary" id="retry-failed">重试查询失败的兑换码</button>':'')+
   codeBucket('状态待确认','这些兑换码对不上明确结果。不要当成未找到，也不要当成未使用。',report.pending,'copy-pending','复制状态待确认的兑换码')+
   (report.invalid.length?'<p id="format-invalid">请输入有效的兑换码。</p>':'')+(report.concealed?'<p id="invalid-keys">'+esc(codeProblem())+'</p>':'');
- target.querySelectorAll('.query-copy').forEach(b=>b.onclick=()=>copy(orderInfo(report.found[Number(b.dataset.i)].order),$('query-copy-status')));
+ target.querySelectorAll('.query-copy').forEach(b=>b.onclick=()=>copy(orderInfo(visible[Number(b.dataset.i)].order),$('query-copy-status')));
  const copyMap=[['copy-missing',report.missing],['copy-disabled',report.disabled],['copy-expired',report.expired],['copy-locked',report.locked],['copy-failed',report.failed],['copy-pending',report.pending]];
  for(const [id,list] of copyMap){const button=$(id);if(button)button.onclick=()=>copy(codeLines(list),$('query-copy-status'))}
  const retry=$('retry-failed');if(retry)retry.onclick=()=>{const field=$('query-cdks');if(!field||busy)return;field.value=codeLines(report.failed);$('query-form').requestSubmit()};
 }
 async function restore(){if(busy)return;busy=true;clearError();const release=inlineLoading($('resume')||$('code-form')?.querySelector('[type=submit]'),'正在恢复查询…');const gen=navGen;try{if(flow.queryToken){showProcessing({status:'processing',order_no:flow.orderNo},true);await poll(true)}else{const rows=await query(flow.cdk,true);if(gen!==navGen)return;if(rows.length){flow.uncertain=rows.some(x=>x.status==='processing');persist();showResults(rows)}else if(gen===navGen)err(new Error('暂未查到订单，这不代表兑换码无效。上次提交结果仍需确认，请保留兑换码稍后查询，或联系萌萌哒 AI。'))}}catch(e){if(gen===navGen)err(e)}finally{release();busy=false}}
 function paintQuery(report){lastQueryReport=report;const box=$('query-results');if(!box)return;if(report.concealed&&!report.found.length&&!report.missing.length&&!report.failed.length&&!report.disabled.length&&!report.expired.length&&!report.pending.length&&!report.locked.length){box.innerHTML='<p id="invalid-keys">'+esc(codeProblem())+'</p>';return}renderQueryReport(report)}
-function showQuery(){cancelLookup();noteStep('query');markMode('query');render(heading('订单查询 · 离开后也能找回','输入兑换码，<span>看看进度。</span>','一行一个 CDK，最多 50 个。查到的订单和没查到的兑换码都会留下。没查到订单不代表未使用或可以充值。')+'<form id="query-form"><label for="query-cdks">兑换码（CDK）</label><textarea id="query-cdks" class="cdk-field" spellcheck="false" autocomplete="off" placeholder="一行一个兑换码，最多 50 个" required>'+esc(queryDraft||publicCdkInput(flow))+'</textarea><div class="actions"><button class="btn" type="submit">查询订单 →</button><button class="text-btn" type="button" id="back-redeem">返回充值</button></div></form><div id="query-results"></div>',1);recordHistory('query');$('back-redeem').onclick=()=>{captureFields();if(history.state?.app==='jmm-redeem'&&history.state.step==='query'&&history.state.root===true){applyingHistory=true;try{showCode()}finally{applyingHistory=false}history.replaceState(historyMark('code',true),'');historyReady=true;return}leaveOrBack(null)};$('query-form').onsubmit=async e=>{e.preventDefault();if(busy)return;clearError();queryDraft=$('query-cdks').value;const parsed=parseQueryInput(queryDraft);if(!parsed)return;if(parsed.tooMany){clearStaleKeyView();err(new Error('一次最多查 50 个兑换码，分开查就好。'));return}if(preview){renderQueryReport(demoQueryReport());return}if(!parsed.items.length){clearStaleKeyView();lastQueryReport=null;err(new Error('请输入有效的兑换码。'));const box=$('query-results');if(box)box.innerHTML='<p id="format-invalid">请输入有效的兑换码。</p>';return}busy=true;const gen=navGen;const release=inlineLoading($('query-form').querySelector('.btn'),'正在查询…');try{const report=concealUsedNonPan(classifyQuery(parsed.items,await api('queryOrder',{cdks:parsed.items.map(x=>x.cdk)})));if(gen!==navGen)return;report.invalid=parsed.invalid;paintQuery(report)}catch(error){if(gen!==navGen)return;err(error);paintQuery({inputCount:parsed.items.length,found:[],missing:[],failed:parsed.items.map(x=>({...x,error:error.message||''})),disabled:[],expired:[],pending:[],locked:[],invalid:parsed.invalid,concealed:false})}finally{release();busy=false}};const queryField=$('query-cdks');if(queryField)queryField.addEventListener('input',()=>{queryDraft=queryField.value;lastQueryReport=null;const box=$('query-results');if(box)box.innerHTML='';clearError()});}
+function showQuery(){cancelLookup();noteStep('query');markMode('query');render(heading('订单查询 · 离开后也能找回','输入兑换码，<span>看看进度。</span>','一行一个 CDK，最多 50 个。查到的订单和没查到的兑换码都会留下。没查到订单不代表未使用或可以充值。')+'<form id="query-form"><label for="query-cdks">兑换码（CDK）</label><textarea id="query-cdks" class="cdk-field" spellcheck="false" autocomplete="off" placeholder="一行一个兑换码，最多 50 个" required>'+esc(queryDraft||publicCdkInput(flow))+'</textarea><div class="actions"><button class="btn" type="submit">查询订单 →</button><button class="text-btn" type="button" id="back-redeem">返回充值</button></div></form><div id="query-results"></div>',1);recordHistory('query');$('back-redeem').onclick=()=>{captureFields();if(history.state?.app==='jmm-redeem'&&history.state.step==='query'&&history.state.root===true){applyingHistory=true;try{showCode()}finally{applyingHistory=false}history.replaceState(historyMark('code',true),'');historyReady=true;return}leaveOrBack(null)};$('query-form').onsubmit=async e=>{e.preventDefault();if(busy)return;clearError();queryDraft=$('query-cdks').value;const parsed=parseQueryInput(queryDraft);if(!parsed)return;if(parsed.tooMany){clearStaleKeyView();err(new Error('一次最多查 50 个兑换码，分开查就好。'));return}if(preview){renderQueryReport(demoQueryReport());return}if(!parsed.items.length){clearStaleKeyView();lastQueryReport=null;err(new Error('请输入有效的兑换码。'));const box=$('query-results');if(box)box.innerHTML='<p id="format-invalid">请输入有效的兑换码。</p>';return}busy=true;const gen=navGen;const release=inlineLoading($('query-form').querySelector('.btn'),'正在查询…');try{const report=countHiddenOrders(classifyQuery(parsed.items,await api('queryOrder',{cdks:parsed.items.map(x=>x.cdk)})));if(gen!==navGen)return;report.invalid=parsed.invalid;paintQuery(report)}catch(error){if(gen!==navGen)return;err(error);paintQuery({inputCount:parsed.items.length,found:[],missing:[],failed:parsed.items.map(x=>({...x,error:error.message||''})),disabled:[],expired:[],pending:[],locked:[],invalid:parsed.invalid,concealed:false})}finally{release();busy=false}};const queryField=$('query-cdks');if(queryField)queryField.addEventListener('input',()=>{queryDraft=queryField.value;lastQueryReport=null;const box=$('query-results');if(box)box.innerHTML='';clearError()});}
 function showResults(rows){const report={inputCount:rows.length,found:rows.map(o=>({input:o.cdk||'',cdk:o.cdk||'',pan:true,order:o})),missing:[],failed:[],disabled:[],expired:[],pending:[],locked:[],invalid:[]};lastQueryReport=report;showQuery();paintQuery(report)}
 function replaceHistory(step,root){history.replaceState(historyMark(step,root),'');historyReady=true}
 function showFromHistory(state){

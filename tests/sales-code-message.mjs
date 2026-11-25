@@ -109,16 +109,16 @@ try {
  await injected.click('#query-tab');
  await injected.waitForSelector('#query-cdks');
  await injected.evaluate(() => {document.getElementById('query-cdks').value='Pan-aBcD\nMomoda-USED'; document.getElementById('query-form').requestSubmit()});
- await injected.waitForFunction(text => {const box=document.getElementById('invalid-keys'); return box && box.textContent===text}, {}, message(nasty));
+ await injected.waitForFunction(() => {const box=document.getElementById('found-count'); return box && box.textContent==='有2个找到订单'});
  const safe = await injected.evaluate(text => ({
   alert:document.getElementById('alert').textContent,
-  box:document.getElementById('invalid-keys').textContent,
-  images:document.querySelectorAll('#invalid-keys img, #alert img').length,
-  scripts:document.querySelectorAll('#invalid-keys script, #alert script').length,
+  count:document.getElementById('found-count').textContent,
+  images:document.querySelectorAll('#query-results img, #alert img').length,
+  scripts:document.querySelectorAll('#query-results script, #alert script').length,
   order:document.getElementById('query-results').innerText.includes('ORD-aBcD'),
   hidden:!document.getElementById('query-results').innerText.includes('ORD-USED')
  }), message(nasty));
- check('batch and manual messages stay plain text', safe.alert===message(nasty) && safe.box===message(nasty) && safe.images===0 && safe.scripts===0 && safe.order && safe.hidden && injected.__dialogs().length===0, JSON.stringify(safe));
+ check('batch count stays plain and manual message stays text', safe.alert===message(nasty) && safe.count==='有2个找到订单' && safe.images===0 && safe.scripts===0 && safe.order && safe.hidden && injected.__dialogs().length===0, JSON.stringify(safe));
  await injected.close();
 
  const fresh = await open('?sales=FreshWx&cdk=FRESH');

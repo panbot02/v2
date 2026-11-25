@@ -128,9 +128,9 @@ try {
  await page.click('#query-tab');
  await page.waitForSelector('#query-cdks');
  await page.evaluate(() => {document.getElementById('query-cdks').value='Pan-aBcD\nMomoda-USED\nGONE'; document.getElementById('query-form').requestSubmit()});
- await page.waitForFunction(() => {const box=document.getElementById('query-results'); return box && box.innerText.includes('ORD-aBcD') && box.innerText.includes('兑换码识别异常，可以联系panplus5')});
+ await page.waitForFunction(() => {const box=document.getElementById('query-results'); return box && box.innerText.includes('ORD-aBcD') && box.innerText.includes('有2个找到订单')});
  const mixed = await page.$eval('#query-results', el => el.innerText);
- check('batch shows the Pan order only', mixed.includes('ORD-aBcD') && mixed.includes('兑换码识别异常，可以联系panplus5') && !mixed.includes('ORD-USED'));
+ check('batch shows the Pan order only', mixed.includes('ORD-aBcD') && mixed.includes('有2个找到订单') && !mixed.includes('ORD-USED'));
  check('batch still shows a code with no order', mixed.includes('GONE') && !mixed.includes('ORD-USED'));
  const copied = await page.evaluate(() => {window.__copied=''; navigator.clipboard.writeText=async text=>{window.__copied=text}; return true});
  if(await page.$('#copy-missing')) await page.click('#copy-missing');

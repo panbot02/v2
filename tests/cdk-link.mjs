@@ -6,7 +6,7 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const puppeteer = (await import(pathToFileURL(process.env.PUPPETEER_CORE || '/tmp/pwtest/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js').href)).default;
-const problem = '兑换码有问题，可以联系销售更换账号';
+const problem = '兑换码识别异常，可以联系panplus5';
 const calls = [];
 
 function type(file){
@@ -121,12 +121,12 @@ try {
  await usedPan.close();
 
  const usedRaw = await open('?cdk=USED');
- await usedRaw.waitForFunction(() => document.getElementById('alert').textContent==='兑换码有问题，可以联系销售更换账号');
+ await usedRaw.waitForFunction(text => document.getElementById('alert').textContent===text, {}, problem);
  check('linked used raw code shows only the problem message', posts('verifyCdk','USED').length===1 && posts('queryOrder','USED').length===0 && await usedRaw.$('#lookup-product')===null);
  await usedRaw.close();
 
  const missing = await open('?cdk=Momoda-MISSING');
- await missing.waitForFunction(() => document.getElementById('alert').textContent==='兑换码有问题，可以联系销售更换账号');
+ await missing.waitForFunction(text => document.getElementById('alert').textContent===text, {}, problem);
  check('linked missing code uses the same message', posts('verifyCdk','MISSING').length===1 && posts('queryOrder','MISSING').length===0);
  await missing.close();
 

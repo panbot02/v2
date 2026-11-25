@@ -99,23 +99,23 @@ try {
  await page.waitForSelector('#cdk');
  const beforeMomoda = postsFor('queryOrder','USED').length;
  await submitCode(page, 'Momoda-USED');
- await page.waitForFunction(() => document.getElementById('alert').textContent==='兑换码有问题，可以联系销售更换账号');
+ await page.waitForFunction(() => document.getElementById('alert').textContent==='兑换码识别异常，可以联系panplus5');
  const momodaView = await page.evaluate(() => ({alert:document.getElementById('alert').textContent, order:document.body.innerText.includes('ORD-USED'), product:!!document.getElementById('lookup-product'), session:!!document.getElementById('session')}));
- check('used Momoda- is only 兑换码有问题，可以联系销售更换账号', momodaView.alert==='兑换码有问题，可以联系销售更换账号' && momodaView.order===false && momodaView.product===false && momodaView.session===false, JSON.stringify(momodaView));
+ check('used Momoda- is only 兑换码识别异常，可以联系panplus5', momodaView.alert==='兑换码识别异常，可以联系panplus5' && momodaView.order===false && momodaView.product===false && momodaView.session===false, JSON.stringify(momodaView));
  check('used Momoda- is verified and not queried', postsFor('verifyCdk','USED').length===1 && postsFor('queryOrder','USED').length===beforeMomoda);
 
  await submitCode(page, 'USED');
- await page.waitForFunction(() => document.getElementById('alert').textContent==='兑换码有问题，可以联系销售更换账号');
+ await page.waitForFunction(() => document.getElementById('alert').textContent==='兑换码识别异常，可以联系panplus5');
  check('used raw code is not queried', postsFor('queryOrder','USED').length===beforeMomoda && !((await page.evaluate(() => document.body.innerText)).includes('ORD-USED')));
 
  const missingMark = calls.length;
  await submitCode(page, 'Momoda-MISSING');
  await page.waitForFunction(() => !document.getElementById('alert').hidden);
  const missingAlert = await page.$eval('#alert', el => el.textContent);
- check('missing code uses the replacement message', missingAlert==='兑换码有问题，可以联系销售更换账号' && calls.length===missingMark+1);
+ check('missing code uses the replacement message', missingAlert==='兑换码识别异常，可以联系panplus5' && calls.length===missingMark+1);
  await submitCode(page, 'LOCKED');
  await page.waitForFunction(() => document.getElementById('alert').textContent.includes('正在使用中'));
- check('locked code is not called used', (await page.$eval('#alert', el => el.textContent))!=='兑换码有问题，可以联系销售更换账号');
+ check('locked code is not called used', (await page.$eval('#alert', el => el.textContent))!=='兑换码识别异常，可以联系panplus5');
 
  const emptyMark = calls.length;
  await submitCode(page, 'Pan-');
@@ -128,9 +128,9 @@ try {
  await page.click('#query-tab');
  await page.waitForSelector('#query-cdks');
  await page.evaluate(() => {document.getElementById('query-cdks').value='Pan-aBcD\nMomoda-USED\nGONE'; document.getElementById('query-form').requestSubmit()});
- await page.waitForFunction(() => {const box=document.getElementById('query-results'); return box && box.innerText.includes('ORD-aBcD') && box.innerText.includes('兑换码有问题，可以联系销售更换账号')});
+ await page.waitForFunction(() => {const box=document.getElementById('query-results'); return box && box.innerText.includes('ORD-aBcD') && box.innerText.includes('兑换码识别异常，可以联系panplus5')});
  const mixed = await page.$eval('#query-results', el => el.innerText);
- check('batch shows the Pan order only', mixed.includes('ORD-aBcD') && mixed.includes('兑换码有问题，可以联系销售更换账号') && !mixed.includes('ORD-USED'));
+ check('batch shows the Pan order only', mixed.includes('ORD-aBcD') && mixed.includes('兑换码识别异常，可以联系panplus5') && !mixed.includes('ORD-USED'));
  check('batch still shows a code with no order', mixed.includes('GONE') && !mixed.includes('ORD-USED'));
  const copied = await page.evaluate(() => {window.__copied=''; navigator.clipboard.writeText=async text=>{window.__copied=text}; return true});
  if(await page.$('#copy-missing')) await page.click('#copy-missing');

@@ -11,12 +11,12 @@ function redactService(value){
 }
 function leakedPayload(value){return /<[^>]+>/.test(value)||/access[_-]?token|sessionkey|set-cookie|document\.cookie/i.test(value)||(/^\s*[\[{]/.test(value)&&/[}\]]\s*$/.test(value))}
 const brandText=v=>redactService(String(v??'').replace(/脚萌萌哒/ig,'萌萌哒 AI'));
-const CODE_PROBLEM='兑换码有问题，可以联系销售更换账号';
 function friendly(v){
  if(typeof v!=='string')return '这一步暂时没有完成，请稍后再试。';
  const raw=v.trim();
+ if(raw&&raw===codeProblem())return raw;
  if(!raw||leakedPayload(raw))return '服务暂不可用，请稍后再试。';
- if(compactError(raw)==='cdk不存在或不可用')return CODE_PROBLEM;
+ if(compactError(raw)==='cdk不存在或不可用')return codeProblem();
  const text=brandText(raw);
  if(!text||text==='充值服务')return '服务暂不可用，请稍后再试。';
  return text;
@@ -26,6 +26,7 @@ const plan=v=>PLAN[v]||brandText(v||'暂未提供');
 const PROVIDER={openai:'ChatGPT',claude:'Claude',grok:'Grok'};
 const MAX=5*1024*1024, KEY='jmm.redeem.flow.v1';
 let W=(function(){var q=(location.search+'&'+location.hash.slice(1)).replace(/^\?/,'').split('&');for(var i=0;i<q.length;i++){var kv=q[i].split('=');if(kv[0].toLowerCase()==='sales'&&kv[1]){try{var v=decodeURIComponent(kv[1]).trim();if(v)return v.slice(0,40)}catch(e){}}}return 'panplus5'})();
+function codeProblem(){return '兑换码识别异常，可以联系'+W}
 document.querySelectorAll('.wxid').forEach(e=>e.textContent=W);
 const hasSales=/(?:^|[?&#])sales=/i.test(location.search+'&'+location.hash.slice(1));
 function salesURL(path){let u=new URL(path,location.href);if(hasSales)u.searchParams.set('Sales',W);if(!path.includes('#'))u.hash='';return u.pathname+u.search+u.hash}
@@ -58,13 +59,12 @@ let preview=new URLSearchParams(location.hash.slice(1)).get('preview')||new URLS
 if(!['step1','step2','confirm','success','query','processing','failed'].includes(preview))preview=null;
 if(window.JMM_DESIGN_PREVIEW_ONLY===true&&!preview)preview='step1';
 const DEMO={provider:'openai',product_name:'ChatGPT Plus',plan:'chatgptplusplan',activation_token:'preview-only',expires_in:900,expires_at:new Date(Date.now()+900000).toISOString()};
-const KEY_ERROR=CODE_PROBLEM;
 function readCdk(value){const raw=String(value??'').trim();if(!raw)throw new Error('请输入有效的兑换码。');const m=raw.match(/^(momoda|pan)-/i);if(!m)return {key:raw,pan:false,input:raw};const key=raw.slice(m[0].length).trim();if(!key)throw new Error('请输入有效的兑换码。');return {key,pan:m[1].toLowerCase()==='pan',input:raw}}
 function normalizeCdk(value){return readCdk(value).key}
 function canonicalCdk(value){const key=String(value??'').trim();if(!key)throw new Error('请输入有效的兑换码。');return key}
 function publicCdkInput(saved){const typed=saved?.cdkInput;if(!typed||!saved?.cdk)return '';try{return normalizeCdk(typed)===saved.cdk?typed:''}catch{return ''}}
 function clearStaleKeyView(){cancelLookup();cdkValid=false;token='';account=null;syncHead();const q=$('query-results');if(q)q.innerHTML='';const look=$('lookup-result');if(look)look.remove();if($('network-note'))$('network-note').hidden=true;}
-function rejectKey(){clearStaleKeyView();err(new Error(KEY_ERROR));}
+function rejectKey(){clearStaleKeyView();err(new Error(codeProblem()));}
 function usedRecord(entry){if(!entry||entry.pan)return false;if(entry.order)return true;const status=String(entry.status||'').toLowerCase();if(status==='activated')return true;return /已兑换/.test(entry.note||'')}
 function concealUsedNonPan(report){let hidden=0;const keep=list=>list.filter(item=>{if(!usedRecord(item))return true;hidden++;return false});report.found=keep(report.found||[]);report.pending=keep(report.pending||[]);if(hidden){report.inputCount=Math.max(0,(report.inputCount||0)-hidden);report.concealed=true}return report}
 let flow=null;try{const p=JSON.parse(safeGet(KEY));if(p&&typeof p.nonce==='string'&&/^[A-Za-z0-9_-]+$/.test(p.nonce)&&p.nonce.length>=22&&p.nonce.length<=86&&typeof p.cdk==='string'){const input=p.cdkInput||'';p.cdk=p.cdkNormalized===true?canonicalCdk(p.cdk):normalizeCdk(p.cdk);p.cdkInput=input;let pan=false;try{const again=readCdk(input);pan=again.pan&&again.key===p.cdk}catch{}p.panOrigin=pan;p.cdkNormalized=true;flow=p}}catch{}
@@ -419,14 +419,14 @@ function renderQueryReport(report){
   codeBucket('查询失败','这些兑换码本次没有查完，没有计入未找到订单。可以只重试这一部分。',report.failed,'copy-failed','复制查询失败的兑换码')+
   (report.failed.length?'<button type="button" class="btn secondary" id="retry-failed">重试查询失败的兑换码</button>':'')+
   codeBucket('状态待确认','这些兑换码对不上明确结果。不要当成未找到，也不要当成未使用。',report.pending,'copy-pending','复制状态待确认的兑换码')+
-  (report.invalid.length?'<p id="format-invalid">请输入有效的兑换码。</p>':'')+(report.concealed?'<p id="invalid-keys">'+esc(KEY_ERROR)+'</p>':'');
+  (report.invalid.length?'<p id="format-invalid">请输入有效的兑换码。</p>':'')+(report.concealed?'<p id="invalid-keys">'+esc(codeProblem())+'</p>':'');
  target.querySelectorAll('.query-copy').forEach(b=>b.onclick=()=>copy(orderInfo(report.found[Number(b.dataset.i)].order),$('query-copy-status')));
  const copyMap=[['copy-missing',report.missing],['copy-disabled',report.disabled],['copy-expired',report.expired],['copy-locked',report.locked],['copy-failed',report.failed],['copy-pending',report.pending]];
  for(const [id,list] of copyMap){const button=$(id);if(button)button.onclick=()=>copy(codeLines(list),$('query-copy-status'))}
  const retry=$('retry-failed');if(retry)retry.onclick=()=>{const field=$('query-cdks');if(!field||busy)return;field.value=codeLines(report.failed);$('query-form').requestSubmit()};
 }
 async function restore(){if(busy)return;busy=true;clearError();const release=inlineLoading($('resume')||$('code-form')?.querySelector('[type=submit]'),'正在恢复查询…');const gen=navGen;try{if(flow.queryToken){showProcessing({status:'processing',order_no:flow.orderNo},true);await poll(true)}else{const rows=await query(flow.cdk,true);if(gen!==navGen)return;if(rows.length){flow.uncertain=rows.some(x=>x.status==='processing');persist();showResults(rows)}else if(gen===navGen)err(new Error('暂未查到订单，这不代表兑换码无效。上次提交结果仍需确认，请保留兑换码稍后查询，或联系萌萌哒 AI。'))}}catch(e){if(gen===navGen)err(e)}finally{release();busy=false}}
-function paintQuery(report){lastQueryReport=report;const box=$('query-results');if(!box)return;if(report.concealed&&!report.found.length&&!report.missing.length&&!report.failed.length&&!report.disabled.length&&!report.expired.length&&!report.pending.length&&!report.locked.length){box.innerHTML='<p id="invalid-keys">'+esc(KEY_ERROR)+'</p>';return}renderQueryReport(report)}
+function paintQuery(report){lastQueryReport=report;const box=$('query-results');if(!box)return;if(report.concealed&&!report.found.length&&!report.missing.length&&!report.failed.length&&!report.disabled.length&&!report.expired.length&&!report.pending.length&&!report.locked.length){box.innerHTML='<p id="invalid-keys">'+esc(codeProblem())+'</p>';return}renderQueryReport(report)}
 function showQuery(){cancelLookup();noteStep('query');markMode('query');render(heading('订单查询 · 离开后也能找回','输入兑换码，<span>看看进度。</span>','一行一个 CDK，最多 50 个。查到的订单和没查到的兑换码都会留下。没查到订单不代表未使用或可以充值。')+'<form id="query-form"><label for="query-cdks">兑换码（CDK）</label><textarea id="query-cdks" class="cdk-field" spellcheck="false" autocomplete="off" placeholder="一行一个兑换码，最多 50 个" required>'+esc(queryDraft||publicCdkInput(flow))+'</textarea><div class="actions"><button class="btn" type="submit">查询订单 →</button><button class="text-btn" type="button" id="back-redeem">返回充值</button></div></form><div id="query-results"></div>',1);recordHistory('query');$('back-redeem').onclick=()=>{captureFields();if(history.state?.app==='jmm-redeem'&&history.state.step==='query'&&history.state.root===true){applyingHistory=true;try{showCode()}finally{applyingHistory=false}history.replaceState(historyMark('code',true),'');historyReady=true;return}leaveOrBack(null)};$('query-form').onsubmit=async e=>{e.preventDefault();if(busy)return;clearError();queryDraft=$('query-cdks').value;const parsed=parseQueryInput(queryDraft);if(!parsed)return;if(parsed.tooMany){clearStaleKeyView();err(new Error('一次最多查 50 个兑换码，分开查就好。'));return}if(preview){renderQueryReport(demoQueryReport());return}if(!parsed.items.length){clearStaleKeyView();lastQueryReport=null;err(new Error('请输入有效的兑换码。'));const box=$('query-results');if(box)box.innerHTML='<p id="format-invalid">请输入有效的兑换码。</p>';return}busy=true;const gen=navGen;const release=inlineLoading($('query-form').querySelector('.btn'),'正在查询…');try{const report=concealUsedNonPan(classifyQuery(parsed.items,await api('queryOrder',{cdks:parsed.items.map(x=>x.cdk)})));if(gen!==navGen)return;report.invalid=parsed.invalid;paintQuery(report)}catch(error){if(gen!==navGen)return;err(error);paintQuery({inputCount:parsed.items.length,found:[],missing:[],failed:parsed.items.map(x=>({...x,error:error.message||''})),disabled:[],expired:[],pending:[],locked:[],invalid:parsed.invalid,concealed:false})}finally{release();busy=false}};const queryField=$('query-cdks');if(queryField)queryField.addEventListener('input',()=>{queryDraft=queryField.value;lastQueryReport=null;const box=$('query-results');if(box)box.innerHTML='';clearError()});}
 function showResults(rows){const report={inputCount:rows.length,found:rows.map(o=>({input:o.cdk||'',cdk:o.cdk||'',pan:true,order:o})),missing:[],failed:[],disabled:[],expired:[],pending:[],locked:[],invalid:[]};lastQueryReport=report;showQuery();paintQuery(report)}
 function replaceHistory(step,root){history.replaceState(historyMark(step,root),'');historyReady=true}
